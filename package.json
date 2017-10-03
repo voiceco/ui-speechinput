@@ -1,0 +1,30 @@
+{
+  "name": "ui-speechinput",
+  "version": "0.0.1",
+  "private": true,
+  "description": "a re-usable speech input widget encapsulated in a DOM element",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voiceco/ui-speechinput.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/voiceco/ui-speechinput/issues"
+  },
+  "homepage": "https://github.com/voiceco/ui-speechinput#readme",
+  "dependencies": {
+    "ev-pubsub": "^2.2.0",
+    "get-user-media-promise": "^1.1.1",
+    "is-touch": "^1.1.0",
+    "lodash.pick": "^4.4.0",
+    "upsocket": "^2.1.0"
+  }
+}
