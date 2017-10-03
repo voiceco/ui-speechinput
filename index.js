@@ -61,10 +61,14 @@ module.exports = function speechInput(options={}) {
 
 
   const recordingState = function() {
-    const mic = micStream()
-    let speech, mp3Encoder, currentItem
+    //const mic = micStream()
+    let speech, mp3Encoder, currentItem, mic
 
     const enter = async function() {
+      if(!mic) {
+        console.log('createing mic')
+        mic = micStream()
+      }
       if(!mp3Encoder)
         mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
 
