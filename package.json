@@ -25,6 +25,7 @@
     "get-user-media-promise": "^1.1.1",
     "is-touch": "^1.1.0",
     "lodash.pick": "^4.4.0",
-    "upsocket": "^2.1.0"
+    "upsocket": "^2.1.0",
+    "webworkify": "^1.4.0"
   }
 }

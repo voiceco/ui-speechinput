@@ -15,7 +15,8 @@ function appendItem() {
 }
 
 
-module.exports = function speechInput() {
+module.exports = function speechInput(options={}) {
+  const watsonTokenURL = options.tokenURL || '/token' //  /speech-to-text/token
   const fsm = fsmFactory()
 
   const dom = document.createElement('div')
@@ -76,7 +77,7 @@ module.exports = function speechInput() {
       })
 
       const [ token, status ] = await Promise.all([
-        getToken('/token'),  //   /speech-to-text/token
+        getToken(watsonTokenURL),
         mic.start()
       ])
 
