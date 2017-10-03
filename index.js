@@ -1,6 +1,6 @@
 'use strict'
 
-const fsmFactory   = require('./lib/finite-state-machine')()
+const fsmFactory   = require('./lib/finite-state-machine')
 const getToken     = require('./lib/watson-get-token')
 const micStream    = require('./lib/stream-microphone')
 const mp3Stream    = require('./lib/webaudio-mp3-stream')
