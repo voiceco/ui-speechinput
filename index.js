@@ -23,8 +23,8 @@ module.exports = function speechInput(options={}) {
   dom.innerHTML = `<div id="transcription-output"></div>
 <button class="record" disabled>record</button>
 <button class="pause" disabled>pause</button>
-<button class="re-record" disabled>re-record</button>
 <button class="resume" disabled>resume</button>
+<button class="re-record" disabled>re-record</button>
 <button class="done" disabled>done</button>`
 
   fsm.addState('idle', {
