@@ -23,7 +23,6 @@ module.exports = function speechInput(options={}) {
   dom.innerHTML = `<div id="transcription-output"></div>
 <button class="record" disabled>record</button>
 <button class="pause" disabled>pause</button>
-<button class="resume" disabled>resume</button>
 <button class="re-record" disabled>re-record</button>
 <button class="done" disabled>done</button>`
 
@@ -39,8 +38,7 @@ module.exports = function speechInput(options={}) {
         'button.pause': true,
         'button.re-record': true,
         'button.done': true,
-        'button.record': false,
-        'button.resume': true
+        'button.record': false
       })
     }
   })
@@ -112,9 +110,7 @@ module.exports = function speechInput(options={}) {
         'button.pause': false,
         'button.re-record': false,
         'button.done': false,
-
-        'button.record': true,
-        'button.resume': true
+        'button.record': true
       })
     }
 
@@ -133,7 +129,7 @@ module.exports = function speechInput(options={}) {
 
   fsm.addState('paused', {
     enter: function() {
-      select('button.resume').onclick = function(ev) {
+      select('button.record').onclick = function(ev) {
         fsm.setState('recording')
       }
 
@@ -149,9 +145,7 @@ module.exports = function speechInput(options={}) {
         'button.pause': true,
         'button.re-record': false,
         'button.done': false,
-
-        'button.record': true,
-        'button.resume': false
+        'button.record': false,
       })
     }
   })
