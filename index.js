@@ -228,11 +228,11 @@ module.exports = function speechInput(options={}) {
 
   fsm.setState('idle')
 
-  const record = async function(uuid) {
+  const transcribe = async function(uuid) {
     fsm.setState('idle')
 
     // TODO
   }
 
-  return Object.freeze({ dom, record })
+  return Object.freeze({ dom, transcribe })
 }
