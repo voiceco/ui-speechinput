@@ -106,7 +106,7 @@ module.exports = function speechInput(options={}) {
     })
   }
 
-  let mic, mp3Encoder
+  let mic, mp3Encoder, transcriptionPromise
 
   const recordButton = dom.querySelector('button.record')
   press.once(recordButton, function(ev) {
@@ -221,7 +221,7 @@ module.exports = function speechInput(options={}) {
 
   fsm.addState('finalizing', {
     enter: function() {
-      // TODO: p.resolve()
+      transcriptionPromise.resolve(select('#transcription-output').innerText)
       fsm.setState('idle')
     }
   })
@@ -230,8 +230,8 @@ module.exports = function speechInput(options={}) {
 
   const transcribe = async function(uuid) {
     fsm.setState('idle')
-
-    // TODO
+    transcriptionPromise = new Promise()
+    return await transcriptionPromise
   }
 
   return Object.freeze({ dom, transcribe })
