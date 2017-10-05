@@ -20,9 +20,11 @@ const transcription = await s.record(id)
 
 
 todo:
+* show recording indicator
 * refactor watson module to use plain websocket internally
-* load lame dependency independently to reduce bundle size
+* TEST: gracefully handle watson connection failure
 * TEST: what happens when we put the tab in the background?
+* load lame dependency independently to reduce bundle size
 * prototype a push-to-talk type interaction (might be less buttons and easier to use)
 * store audio locally
 * upload audio to backend opportunistically

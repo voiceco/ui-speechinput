@@ -26,10 +26,54 @@ module.exports = function speechInput(options={}) {
   dom.style.touchAction = 'manipulation'
   dom.classList.add('ui-speechinput')
   dom.innerHTML = `<div id="transcription-output"></div>
-<button class="record" disabled>record</button>
-<button class="pause" disabled>pause</button>
-<button class="re-record" disabled>re-record</button>
-<button class="done" disabled>done</button>`
+<div class="control-bar" style="display: flex; flex-direction: row">
+  <div class="record-container recording">
+    <svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+       width="30px" height="30px" viewBox="0 0 24 30" style="enable-background:new 0 0 50 50;" xml:space="preserve">
+      <rect x="0" y="10" width="4" height="10" fill="#fff" opacity="0.2">
+        <animate attributeName="opacity" attributeType="XML" values="0.2; 1; .2" begin="0s" dur="1s" repeatCount="indefinite" />
+        <animate attributeName="height" attributeType="XML" values="10; 20; 10" begin="0s" dur="1s" repeatCount="indefinite" />
+        <animate attributeName="y" attributeType="XML" values="10; 5; 10" begin="0s" dur="1s" repeatCount="indefinite" />
+      </rect>
+      <rect x="8" y="10" width="4" height="10" fill="#fff"  opacity="0.2">
+        <animate attributeName="opacity" attributeType="XML" values="0.2; 1; .2" begin="0.15s" dur="1s" repeatCount="indefinite" />
+        <animate attributeName="height" attributeType="XML" values="10; 20; 10" begin="0.15s" dur="1s" repeatCount="indefinite" />
+        <animate attributeName="y" attributeType="XML" values="10; 5; 10" begin="0.15s" dur="1s" repeatCount="indefinite" />
+      </rect>
+      <rect x="16" y="10" width="4" height="10" fill="#fff"  opacity="0.2">
+        <animate attributeName="opacity" attributeType="XML" values="0.2; 1; .2" begin="0.3s" dur="1s" repeatCount="indefinite" />
+        <animate attributeName="height" attributeType="XML" values="10; 20; 10" begin="0.3s" dur="1s" repeatCount="indefinite" />
+        <animate attributeName="y" attributeType="XML" values="10; 5; 10" begin="0.3s" dur="1s" repeatCount="indefinite" />
+      </rect>
+    <rect x="24" y="10" width="4" height="10" fill="#fff"  opacity="0.2">
+        <animate attributeName="opacity" attributeType="XML" values="0.2; 1; .2" begin="0.45s" dur="1s" repeatCount="indefinite" />
+        <animate attributeName="height" attributeType="XML" values="10; 20; 10" begin="0.45s" dur="1s" repeatCount="indefinite" />
+        <animate attributeName="y" attributeType="XML" values="10; 5; 10" begin="0.45s" dur="1s" repeatCount="indefinite" />
+      </rect>
+    </svg>
+    <span style="padding-left:8px">recording</span>
+  </div>
+  <button class="record" disabled>record</button>
+  <button class="pause" disabled>pause</button>
+  <button class="re-record" disabled>re-record</button>
+  <button class="done" disabled>done</button>
+</div>`
+
+  const recordLabel = dom.querySelector('.record-container')
+  recordLabel.style.color = 'white'
+  recordLabel.style.display = 'flex'
+  recordLabel.style.justifyContent = 'center'
+  recordLabel.style.alignItems = 'center'
+  recordLabel.style.backgroundColor = 'rgba(255, 0, 0, 0.92)'
+  recordLabel.style.minWidth = '120px'
+  recordLabel.style.marginRight = '10px'
+  recordLabel.style.padding = '4px'
+  //recordLabel.style.position = 'relative'
+  //recordLabel.style.bottom ='0px'
+  //recordLabel.style.right = '8px'
+  //recordLabel.style.left = '8px'
+  recordLabel.style.transitionDuration = '0.2s'
+  recordLabel.style.opacity = 0
 
   fsm.addState('idle', {
     enter: function() {
@@ -116,9 +160,12 @@ module.exports = function speechInput(options={}) {
         'button.done': false,
         'button.record': true
       })
+
+      recordLabel.style.opacity = 1
     }
 
     const exit = function() {
+      recordLabel.style.opacity = 0
       mic.unpipe()
       mp3Encoder.unpipe()
       mic.stop()
