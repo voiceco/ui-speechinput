@@ -12,19 +12,15 @@ const s = speechinput()
 
 document.body.appendChild(s.dom)
 
-const id = uuid() // generate a unique uuid for the text we're recording
-const transcription = await s.record(id)
+const id = uuid() // generate a unique uuid for the audio/text we're recording
 
-// transcription === transcribed final text that the user spoke.
+const userText = await s.transcribe(id) // transcription === transcribed final text that the user spoke.
 ```
 
-
 todo:
-* show recording indicator
 * refactor watson module to use plain websocket internally
 * TEST: gracefully handle watson connection failure
-* TEST: what happens when we put the tab in the background?
-* load lame dependency independently to reduce bundle size
-* prototype a push-to-talk type interaction (might be less buttons and easier to use)
+* prototype a push-to-talk interaction (might be less buttons and easier to use)
+* load lamejs independently to reduce bundle size
 * store audio locally
 * upload audio to backend opportunistically

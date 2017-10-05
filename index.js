@@ -117,7 +117,15 @@ module.exports = function speechInput(options={}) {
   const recordingState = function() {
     let speech, currentItem
 
+    const _visibilityChanged = function() {
+      // when the page is hidden, pause recording
+      if(document.hidden)
+        fsm.setState('paused')
+    }
+
     const enter = async function() {
+      document.addEventListener('visibilitychange', _visibilityChanged)
+
       currentItem = appendItem()
       select('#transcription-output').appendChild(currentItem)
 
@@ -165,6 +173,7 @@ module.exports = function speechInput(options={}) {
     }
 
     const exit = function() {
+      document.removeEventListener('visibilitychange', _visibilityChanged)
       recordLabel.style.opacity = 0
       mic.unpipe()
       mp3Encoder.unpipe()
