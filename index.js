@@ -20,6 +20,9 @@ module.exports = function speechInput(options={}) {
   const fsm = fsmFactory()
 
   const dom = document.createElement('div')
+  // enable fast-tap behavior everything in this widget
+  // https://developers.google.com/web/updates/2013/12/300ms-tap-delay-gone-away
+  dom.style.touchAction = 'manipulation'
   dom.classList.add('ui-speechinput')
   dom.innerHTML = `<div id="transcription-output"></div>
 <button class="record" disabled>record</button>
