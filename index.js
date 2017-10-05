@@ -65,11 +65,9 @@ module.exports = function speechInput(options={}) {
 
     const enter = async function() {
       if(!mic) {
-        console.log('createing mic')
         mic = micStream()
-      }
-      if(!mp3Encoder)
         mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
+      }
 
       currentItem = appendItem()
       select('#transcription-output').appendChild(currentItem)
