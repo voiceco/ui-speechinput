@@ -20,6 +20,7 @@ module.exports = function speechInput(options={}) {
   const fsm = fsmFactory()
 
   const dom = document.createElement('div')
+  dom.classList.add('ui-speechinput')
   dom.innerHTML = `<div id="transcription-output"></div>
 <button class="record" disabled>record</button>
 <button class="pause" disabled>pause</button>
