@@ -4,6 +4,7 @@ const fsmFactory   = require('./lib/finite-state-machine')
 const getToken     = require('./lib/watson-get-token')
 const micStream    = require('./lib/stream-microphone')
 const mp3Stream    = require('./lib/webaudio-mp3-stream')
+const press        = require('./lib/press')
 const resultStream = require('./lib/watson-stt-result-stream')
 const watsonSTT    = require('./lib/watson-stt')
 
@@ -61,17 +62,18 @@ module.exports = function speechInput(options={}) {
     })
   }
 
+  let mic, mp3Encoder
+
+  const recordButton = dom.querySelector('button.record')
+  press.once(recordButton, function(ev) {
+    mic = micStream()
+    mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
+  })
 
   const recordingState = function() {
-    //const mic = micStream()
-    let speech, mp3Encoder, currentItem, mic
+    let speech, currentItem
 
     const enter = async function() {
-      if(!mic) {
-        mic = micStream()
-        mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
-      }
-
       currentItem = appendItem()
       select('#transcription-output').appendChild(currentItem)
 
