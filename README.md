@@ -18,9 +18,9 @@ const userText = await s.transcribe(id) // transcription === transcribed final t
 ```
 
 todo:
-* refactor watson module to use plain websocket internally
-* TEST: gracefully handle watson failures (socket closed, connect failed)
-* prototype push-to-talk interaction (might be less buttons and easier to use)
+* refactor watson socket handling
+* gracefully handle watson failures (socket closed, connect failed)
+* expiriment with push-to-talk interaction
 * store audio locally
 * upload audio to backend opportunistically
 * load lamejs independently to reduce bundle size
