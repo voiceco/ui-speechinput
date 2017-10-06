@@ -21,7 +21,7 @@ module.exports = function speechInput(options={}) {
   const fsm = fsmFactory()
 
   const dom = document.createElement('div')
-  // enable fast-tap behavior everything in this widget
+  // enable fast-tap behavior for all interactables in this widget
   // https://developers.google.com/web/updates/2013/12/300ms-tap-delay-gone-away
   dom.style.touchAction = 'manipulation'
   dom.classList.add('ui-speechinput')
@@ -44,7 +44,7 @@ module.exports = function speechInput(options={}) {
         fsm.setState('recording')
       }
 
-      setButtonStates({
+      setButtonDisabledStates({
         'button.pause': true,
         'button.re-record': true,
         'button.done': true,
@@ -58,7 +58,7 @@ module.exports = function speechInput(options={}) {
   }
 
   // key is button selector, value is disabled bool
-  const setButtonStates = function(states) {
+  const setButtonDisabledStates = function(states) {
     Object.keys(states).forEach(function(selector) {
       if(states[selector])
         select(selector).setAttribute('disabled', true)
@@ -74,6 +74,28 @@ module.exports = function speechInput(options={}) {
     mic = micStream()
     mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
   })
+
+
+  const setupRecordingState = function() {
+    const enter = function() {
+      setButtonDisabledStates({
+        'button.pause': true,
+        'button.re-record': true,
+        'button.done': true,
+        'button.record': true,
+      })
+
+      // TODO: set up watson websocket, issue recognizestart
+    }
+
+    const exit = function() {
+      // TODO: tear down all active event listeners
+    }
+
+    return Object.freeze({ enter, exit })
+  }
+
+  fsm.addState('setup-recording', setupRecordingState())
 
   const recordingState = function() {
     let speech, currentItem
@@ -123,7 +145,7 @@ module.exports = function speechInput(options={}) {
         fsm.setState('finalizing')
       }
 
-      setButtonStates({
+      setButtonDisabledStates({
         'button.pause': false,
         'button.re-record': false,
         'button.done': false,
@@ -162,7 +184,7 @@ module.exports = function speechInput(options={}) {
         fsm.setState('finalizing')
       }
 
-      setButtonStates({
+      setButtonDisabledStates({
         'button.pause': true,
         'button.re-record': false,
         'button.done': false,
