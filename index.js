@@ -37,11 +37,13 @@ module.exports = function speechInput(options={}) {
   const recordLabel = recLabel(dom.querySelector('.record-container'))
 
   fsm.addState('idle', {
-    enter: function() {
+    enter: function(er) {
+      if (er)
+        console.error('TODO: display a UI error for:', er)
       const button = select('button.record')
       button.onclick = function(ev) {
         button.setAttribute('disabled', true)
-        fsm.setState('recording')
+        fsm.setState('setup-recording')
       }
 
       setButtonDisabledStates({
@@ -68,6 +70,7 @@ module.exports = function speechInput(options={}) {
   }
 
   let mic, mp3Encoder, transcriptionPromise
+  const speech = watsonSTT({ interim_results: true })
 
   const recordButton = dom.querySelector('button.record')
   press.once(recordButton, function(ev) {
@@ -77,7 +80,7 @@ module.exports = function speechInput(options={}) {
 
 
   const setupRecordingState = function() {
-    const enter = function() {
+    const enter = async function() {
       setButtonDisabledStates({
         'button.pause': true,
         'button.re-record': true,
@@ -85,20 +88,22 @@ module.exports = function speechInput(options={}) {
         'button.record': true,
       })
 
-      // TODO: set up watson websocket, issue recognizestart
+      try {
+        const token = await getToken(watsonTokenURL)
+        await speech.recognizeStart(token)
+        fsm.setState('recording')
+      } catch(er) {
+        fsm.setState('idle', er)
+      }
     }
 
-    const exit = function() {
-      // TODO: tear down all active event listeners
-    }
-
-    return Object.freeze({ enter, exit })
+    return Object.freeze({ enter })
   }
 
   fsm.addState('setup-recording', setupRecordingState())
 
   const recordingState = function() {
-    let speech, currentItem
+    let sttResultStream
 
     const _visibilityChanged = function() {
       // when the page is hidden, pause recording
@@ -109,21 +114,15 @@ module.exports = function speechInput(options={}) {
     const enter = async function() {
       document.addEventListener('visibilitychange', _visibilityChanged)
 
-      currentItem = appendItem()
+      const currentItem = appendItem()
       select('#transcription-output').appendChild(currentItem)
 
-      const sttResultStream = resultStream()
+      sttResultStream = resultStream()
       sttResultStream.subscribe('data', function _receiveSTTResults(data, final) {
         currentItem.innerText = data
       })
 
-      const [ token, status ] = await Promise.all([
-        getToken(watsonTokenURL),
-        mic.start()
-      ])
-
-      // TODO: refactor watsonSTT to use plain websocket and remove auto-reconnect
-      speech = watsonSTT({ token, inactivity_timeout: 5 })
+      await mic.start()
 
       mic
         .pipe(mp3Encoder)
@@ -157,11 +156,15 @@ module.exports = function speechInput(options={}) {
 
     const exit = function() {
       document.removeEventListener('visibilitychange', _visibilityChanged)
+      sttResultStream.unsubscribe('data')
       recordLabel.hide()
+      speech.recognizeStop()
       mic.unpipe()
       mp3Encoder.unpipe()
       mic.stop()
-      speech.close()
+      speech.unpipe()
+      //sttResultStream.clear()
+      //speech.close()
     }
 
     return Object.freeze({ enter, exit })
@@ -169,11 +172,10 @@ module.exports = function speechInput(options={}) {
 
   fsm.addState('recording', recordingState())
 
-
   fsm.addState('paused', {
     enter: function() {
       select('button.record').onclick = function(ev) {
-        fsm.setState('recording')
+        fsm.setState('setup-recording')
       }
 
       select('button.re-record').onclick =  function(ev) {
@@ -193,14 +195,12 @@ module.exports = function speechInput(options={}) {
     }
   })
 
-
   fsm.addState('clearing', {
     enter: function() {
       select('#transcription-output').innerText = ''
-      fsm.setState('recording')
+      fsm.setState('setup-recording')
     }
   })
-
 
   fsm.addState('finalizing', {
     enter: function() {
