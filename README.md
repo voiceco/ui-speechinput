@@ -18,6 +18,12 @@ const userText = await s.transcribe(id) // transcription === transcribed final t
 ```
 
 todo:
+* BUG: rapidly clicking re-record shows this error:
+  "TypeError: Cannot set property 'onclose' of undefined"
+* test error handling:
+  * watson websocket dies
+  * recognition request times out
+  * internet connection lost
 * expiriment with push-to-talk interaction
 * load lamejs independently to reduce bundle size
 * store audio locally

@@ -111,6 +111,10 @@ module.exports = function speechInput(options={}) {
         fsm.setState('paused')
     }
 
+    const _watsonError = function(er) {
+      console.log("TODO: handle watson errrrorrrr", er)
+    }
+
     const enter = async function() {
       document.addEventListener('visibilitychange', _visibilityChanged)
 
@@ -121,6 +125,8 @@ module.exports = function speechInput(options={}) {
       sttResultStream.subscribe('data', function _receiveSTTResults(data, final) {
         currentItem.innerText = data
       })
+
+      speech.subscribe('error', _watsonError)
 
       await mic.start()
 
@@ -157,6 +163,7 @@ module.exports = function speechInput(options={}) {
     const exit = function() {
       document.removeEventListener('visibilitychange', _visibilityChanged)
       sttResultStream.unsubscribe('data')
+      speech.unsubscribe('error')
       recordLabel.hide()
       speech.recognizeStop()
       mic.unpipe()
