@@ -112,7 +112,7 @@ module.exports = function speechInput(options={}) {
     }
 
     const _watsonError = function(er) {
-      console.log("TODO: handle watson errrrorrrr", er)
+      fsm.setState('idle', er)
     }
 
     const enter = async function() {

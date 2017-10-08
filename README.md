@@ -18,7 +18,6 @@ const userText = await s.transcribe(id) // transcription === transcribed final t
 ```
 
 todo:
-* represent tri-state watson listening state ( idle | intializing | recognizing )
 * BUG: rapidly clicking re-record generates several errors
 * test error handling:
   * watson websocket dies
