@@ -18,8 +18,8 @@ const userText = await s.transcribe(id) // transcription === transcribed final t
 ```
 
 todo:
-* BUG: rapidly clicking re-record shows this error:
-  "TypeError: Cannot set property 'onclose' of undefined"
+* represent tri-state watson listening state ( idle | intializing | recognizing )
+* BUG: rapidly clicking re-record generates several errors
 * test error handling:
   * watson websocket dies
   * recognition request times out

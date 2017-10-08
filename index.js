@@ -122,7 +122,7 @@ module.exports = function speechInput(options={}) {
       select('#transcription-output').appendChild(currentItem)
 
       sttResultStream = resultStream()
-      sttResultStream.subscribe('data', function _receiveSTTResults(data, final) {
+      sttResultStream.subscribe('data', function _receiveSTTResults(data) {
         currentItem.innerText = data
       })
 
@@ -135,18 +135,15 @@ module.exports = function speechInput(options={}) {
         .pipe(speech)
         .pipe(sttResultStream)
 
-      const pause = select('button.pause')
-      pause.onclick = function(ev) {
+      select('button.pause').onclick = function(ev) {
         fsm.setState('paused')
       }
 
-      const rerecord = select('button.re-record')
-      rerecord.onclick = function(ev) {
+      select('button.re-record').onclick = function(ev) {
         fsm.setState('clearing')
       }
 
-      const done = select('button.done')
-      done.onclick =  function(ev) {
+      select('button.done').onclick = function(ev) {
         fsm.setState('finalizing')
       }
 
@@ -170,8 +167,6 @@ module.exports = function speechInput(options={}) {
       mp3Encoder.unpipe()
       mic.stop()
       speech.unpipe()
-      //sttResultStream.clear()
-      //speech.close()
     }
 
     return Object.freeze({ enter, exit })
@@ -204,6 +199,12 @@ module.exports = function speechInput(options={}) {
 
   fsm.addState('clearing', {
     enter: function() {
+      setButtonDisabledStates({
+        'button.pause': true,
+        'button.re-record': true,
+        'button.done': true,
+        'button.record': true,
+      })
       select('#transcription-output').innerText = ''
       fsm.setState('setup-recording')
     }
