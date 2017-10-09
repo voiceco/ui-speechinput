@@ -78,6 +78,16 @@ module.exports = function speechInput(options={}) {
     mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
   })
 
+  fsm.addState('offline', {
+    enter: function() {
+      setButtonDisabledStates({
+        'button.pause': true,
+        'button.re-record': true,
+        'button.done': true,
+        'button.record': true,
+      })
+    }
+  })
 
   fsm.addState('setup-recording', {
     enter: async function() {
@@ -212,9 +222,15 @@ module.exports = function speechInput(options={}) {
     }
   })
 
-  // TODO: consider offline as an independent state
   window.addEventListener('offline', function offline() {
-    fsm.setState('paused')
+    fsm.setState('offline')
+  })
+
+  window.addEventListener('online', function offline() {
+    if(select('#transcription-output').innerText.length)
+      fsm.setState('paused')
+    else
+      fsm.setState('idle')
   })
 
   fsm.setState('idle')
