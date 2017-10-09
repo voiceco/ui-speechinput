@@ -29,7 +29,6 @@ module.exports = function speechInput(options={}) {
 <div class="control-bar" style="display: flex; flex-direction: row">
   <div class="record-container recording"></div>
   <button class="record" disabled>record</button>
-  <button class="pause" disabled>pause</button>
   <button class="re-record" disabled>re-record</button>
   <button class="done" disabled>done</button>
 </div>`
@@ -47,7 +46,6 @@ module.exports = function speechInput(options={}) {
       }
 
       setButtonDisabledStates({
-        'button.pause': true,
         'button.re-record': true,
         'button.done': true,
         'button.record': false
@@ -81,7 +79,6 @@ module.exports = function speechInput(options={}) {
   fsm.addState('offline', {
     enter: function() {
       setButtonDisabledStates({
-        'button.pause': true,
         'button.re-record': true,
         'button.done': true,
         'button.record': true,
@@ -92,7 +89,6 @@ module.exports = function speechInput(options={}) {
   fsm.addState('setup-recording', {
     enter: async function() {
       setButtonDisabledStates({
-        'button.pause': true,
         'button.re-record': true,
         'button.done': true,
         'button.record': true,
@@ -123,6 +119,8 @@ module.exports = function speechInput(options={}) {
       const currentItem = appendItem()
       select('#transcription-output').appendChild(currentItem)
 
+      recordButton.innerText = 'pause'
+
       sttResultStream = resultStream()
       sttResultStream.subscribe('data', function _receiveSTTResults(data) {
         currentItem.innerText = data
@@ -139,7 +137,7 @@ module.exports = function speechInput(options={}) {
         .pipe(speech)
         .pipe(sttResultStream)
 
-      select('button.pause').onclick = function(ev) {
+      select('button.record').onclick = function(ev) {
         fsm.setState('paused')
       }
 
@@ -152,10 +150,9 @@ module.exports = function speechInput(options={}) {
       }
 
       setButtonDisabledStates({
-        'button.pause': false,
         'button.re-record': false,
         'button.done': false,
-        'button.record': true
+        'button.record': false
       })
 
       recordLabel.show()
@@ -193,21 +190,21 @@ module.exports = function speechInput(options={}) {
       }
 
       setButtonDisabledStates({
-        'button.pause': true,
         'button.re-record': false,
         'button.done': false,
-        'button.record': false,
+        'button.record': false
       })
+
+      recordButton.innerText = 'record'
     }
   })
 
   fsm.addState('clearing', {
     enter: function() {
       setButtonDisabledStates({
-        'button.pause': true,
         'button.re-record': true,
         'button.done': true,
-        'button.record': true,
+        'button.record': true
       })
       select('#transcription-output').innerText = ''
       fsm.setState('setup-recording')
