@@ -7,7 +7,7 @@ const mp3Stream    = require('./lib/webaudio-mp3-stream')
 const press        = require('./lib/press')
 const recLabel     = require('./lib/ui-recordinglabel')
 const resultStream = require('./lib/watson-stt-result-stream')
-const watsonSTT    = require('./lib/watson-stt-fsm')
+const watsonSTT    = require('./lib/watson-stt')
 
 
 function appendItem() {
