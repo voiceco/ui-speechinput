@@ -19,7 +19,6 @@ const userText = await s.transcribe(id) // transcription === transcribed final t
 ```
 
 todo:
-* load lamejs independently to reduce bundle size
 * expiriment with push-to-talk interaction
 * move test-test/ to example/
 * store audio locally
