@@ -19,13 +19,8 @@ const userText = await s.transcribe(id) // transcription === transcribed final t
 ```
 
 todo:
-* test error handling:
-  * watson websocket dies
-  * recognition request times out
-  * internet connection lost
-* implement recognition timeout
-* expiriment with push-to-talk interaction
 * load lamejs independently to reduce bundle size
+* expiriment with push-to-talk interaction
 * move test-test/ to example/
 * store audio locally
 * upload audio to backend opportunistically
