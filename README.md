@@ -3,6 +3,7 @@ a re-usable speech input widget encapsulated in a DOM element
 
 uses watson for speech-to-text transcription
 
+
 ## usage
 
 ```javascript
@@ -18,12 +19,13 @@ const userText = await s.transcribe(id) // transcription === transcribed final t
 ```
 
 todo:
-* BUG: rapidly clicking re-record generates several errors
 * test error handling:
   * watson websocket dies
   * recognition request times out
   * internet connection lost
+* implement recognition timeout
 * expiriment with push-to-talk interaction
 * load lamejs independently to reduce bundle size
+* move test-test/ to example/
 * store audio locally
 * upload audio to backend opportunistically

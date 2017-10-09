@@ -7,7 +7,7 @@ const mp3Stream    = require('./lib/webaudio-mp3-stream')
 const press        = require('./lib/press')
 const recLabel     = require('./lib/ui-recordinglabel')
 const resultStream = require('./lib/watson-stt-result-stream')
-const watsonSTT    = require('./lib/watson-stt')
+const watsonSTT    = require('./lib/watson-stt-fsm')
 
 
 function appendItem() {
@@ -79,8 +79,8 @@ module.exports = function speechInput(options={}) {
   })
 
 
-  const setupRecordingState = function() {
-    const enter = async function() {
+  fsm.addState('setup-recording', {
+    enter: async function() {
       setButtonDisabledStates({
         'button.pause': true,
         'button.re-record': true,
@@ -90,17 +90,13 @@ module.exports = function speechInput(options={}) {
 
       try {
         const token = await getToken(watsonTokenURL)
-        await speech.recognizeStart(token)
+        speech.recognizeStart(token)
         fsm.setState('recording')
       } catch(er) {
         fsm.setState('idle', er)
       }
     }
-
-    return Object.freeze({ enter })
-  }
-
-  fsm.addState('setup-recording', setupRecordingState())
+  })
 
   const recordingState = function() {
     let sttResultStream
@@ -109,10 +105,6 @@ module.exports = function speechInput(options={}) {
       // when the page is hidden, pause recording
       if(document.hidden)
         fsm.setState('paused')
-    }
-
-    const _watsonError = function(er) {
-      fsm.setState('idle', er)
     }
 
     const enter = async function() {
@@ -126,7 +118,9 @@ module.exports = function speechInput(options={}) {
         currentItem.innerText = data
       })
 
-      speech.subscribe('error', _watsonError)
+      speech.subscribe('error', function(er) {
+        fsm.setState('idle', er)
+      })
 
       await mic.start()
 
@@ -212,7 +206,8 @@ module.exports = function speechInput(options={}) {
 
   fsm.addState('finalizing', {
     enter: function() {
-      transcriptionPromise.resolve(select('#transcription-output').innerText)
+      if(transcriptionPromise)
+        transcriptionPromise.resolve(select('#transcription-output').innerText)
       fsm.setState('idle')
     }
   })
