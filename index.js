@@ -212,6 +212,11 @@ module.exports = function speechInput(options={}) {
     }
   })
 
+  // TODO: consider offline as an independent state
+  window.addEventListener('offline', function offline() {
+    fsm.setState('paused')
+  })
+
   fsm.setState('idle')
 
   const transcribe = async function(uuid) {
