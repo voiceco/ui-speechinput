@@ -1,5 +1,6 @@
 'use strict'
 
+const audioStorage = require('./lib/storage-audio')
 const fsmFactory   = require('./lib/finite-state-machine')
 const getToken     = require('./lib/watson-get-token')
 const micStream    = require('./lib/stream-microphone')
@@ -67,7 +68,7 @@ module.exports = function speechInput(options={}) {
     })
   }
 
-  let mic, mp3Encoder, transcriptionPromise
+  let mic, mp3Encoder, transcriptionPromise, storage
   const speech = watsonSTT({ interim_results: true })
 
   const recordButton = dom.querySelector('button.record')
@@ -233,6 +234,9 @@ module.exports = function speechInput(options={}) {
   fsm.setState('idle')
 
   const transcribe = async function(uuid) {
+    if(!storage)
+      storage = await audioStorage()
+
     fsm.setState('idle')
     transcriptionPromise = new Promise()
     return await transcriptionPromise
