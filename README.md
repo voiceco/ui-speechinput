@@ -19,6 +19,5 @@ const userText = await s.transcribe(id) // transcription === transcribed final t
 ```
 
 todo:
-* push-to-talk prototype
 * store audio locally
 * upload audio to backend opportunistically
