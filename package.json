@@ -27,7 +27,6 @@
     "lamejs": "^1.2.0",
     "localforage": "^1.5.1",
     "lodash.pick": "^4.4.0",
-    "upsocket": "^2.1.0",
     "webworkify": "^1.4.0"
   }
 }
