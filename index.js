@@ -235,7 +235,7 @@ module.exports = function speechInput(options={}) {
 
   const transcribe = async function(uuid) {
     if(!storage)
-      storage = await audioStorage()
+      storage = await audioStorage({ objectKey: 'boswell-audio' })
 
     fsm.setState('idle')
     transcriptionPromise = new Promise()

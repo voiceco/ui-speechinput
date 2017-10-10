@@ -430,7 +430,7 @@ module.exports = function speechInput(options={}) {
 
   const transcribe = async function(uuid) {
     if(!storage)
-      storage = await audioStorage()
+      storage = await audioStorage({ objectKey: 'boswell-audio' })
 
     fsm.setState('idle')
     transcriptionPromise = new Promise()
@@ -532,6 +532,7 @@ const pubsub      = require('ev-pubsub')
 
 
 module.exports = async function audioStorage(options={}) {
+  const { objectKey } = options
   const { publish, subscribe, unsubscribe } = pubsub()
 
   /*
@@ -557,11 +558,19 @@ module.exports = async function audioStorage(options={}) {
     create segment
     clear (delete all segments)
     finalize recording
-
-    list recordings
-    get recording
-    upload recording
   */
+
+  const getRecording = function(key) {
+    return recordings[key]
+  }
+
+  const listRecordings = function() {
+    return Object.keys(recordings)
+  }
+
+  const uploadRecording = function(key) {
+    // TODO: connect to backend and stream the audio up
+  }
 
   const pipe = function(destination) {
     subscribe('data', destination.write)
@@ -584,7 +593,11 @@ module.exports = async function audioStorage(options={}) {
   if(localforage.INDEXEDDB !== localforage.driver())
     throw new Error('failed to run demo. could not use INDEXEDDB driver.')
 
-  return Object.freeze({ subscribe, unsubscribe, write, pipe, unpipe })
+  let recordings = await localforage.getItem(objectKey)
+  if(!recordings)
+    recordings = {}
+
+  return Object.freeze({ getRecording, listRecordings, uploadRecording, subscribe, unsubscribe, write, pipe, unpipe })
 }
 
 },{"ev-pubsub":14,"localforage":18}],7:[function(require,module,exports){
