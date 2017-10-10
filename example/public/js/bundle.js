@@ -438,7 +438,7 @@ module.exports = function speechInput(options={}) {
   })
 
   const recordingState = function() {
-    let sttResultStream
+    let sttResultStream, currentItem
 
     const _visibilityChanged = function() {
       // when the page is hidden, pause recording
@@ -449,7 +449,7 @@ module.exports = function speechInput(options={}) {
     const enter = async function() {
       document.addEventListener('visibilitychange', _visibilityChanged)
 
-      const currentItem = appendItem()
+      currentItem = appendItem()
       select('#transcription-output').appendChild(currentItem)
 
       recordButton.innerText = 'pause'
@@ -469,6 +469,9 @@ module.exports = function speechInput(options={}) {
         .pipe(mp3Encoder)
         .pipe(speech)
         .pipe(sttResultStream)
+
+      storage.createSegment()
+      mp3Encoder.pipe(storage)
 
       select('button.record').onclick = function(ev) {
         fsm.setState('paused')
@@ -492,6 +495,7 @@ module.exports = function speechInput(options={}) {
     }
 
     const exit = function() {
+      storage.setSegmentTranscription(currentItem.innerText)
       document.removeEventListener('visibilitychange', _visibilityChanged)
       sttResultStream.unsubscribe('data')
       speech.unsubscribe('error')
@@ -501,6 +505,7 @@ module.exports = function speechInput(options={}) {
       mp3Encoder.unpipe()
       mic.stop()
       speech.unpipe()
+      currentItem = undefined
     }
 
     return Object.freeze({ enter, exit })
@@ -540,6 +545,7 @@ module.exports = function speechInput(options={}) {
         'button.record': true
       })
       select('#transcription-output').innerText = ''
+      storage.clearSegments()
       fsm.setState('setup-recording')
     }
   })
@@ -579,6 +585,7 @@ module.exports = function speechInput(options={}) {
       transcriptionPromise.rej = rej
     })
 
+    await storage.finalizeRecording()
     dom.style.opacity = 0
     transcriptionPromise.resolve = undefined
     transcriptionPromise.rej = undefined
@@ -683,37 +690,53 @@ module.exports = async function audioStorage(options={}) {
   const { objectKey } = options
   const { publish, subscribe, unsubscribe } = pubsub()
 
-  /*
-  data structure:
-    recordings: {
-      name1: {
-        meta: {
-          created: 12223232,
-          finalized: true,
-          syncedToServer: false,
-          ...
-        },
-        segments: [
-          {
-            data: [ ... ],
-            transcription: "...."
-          }
-        ]
-      }
-    }
-  */
+  let currentRecording, currentSegment
 
-  const createRecording = function(uuid) {
-    console.log('rec:', uuid)
-    // TODO
+  const createRecording = async function(uuid) {
+    if(recordings[uuid])
+      throw new Error('could not create new recording: ' + uuid + ' already exists in storage')
+
+    recordings[uuid] = currentRecording = {
+      meta: {
+        created: Date.now(),
+        finalized: false,
+        syncedToServer: false,
+        type: 'audio/mp3'
+      },
+      segments: [ ]
+    }
+  }
+
+  // remove all segments from the current recording
+  const clearSegments = function() {
+    if(!currentRecording)
+      return
+
+    currentRecording.segments.length = 0
   }
 
   const createSegment = function() {
-    // TODO
+    if(!currentRecording)
+      return
+
+    currentSegment = {
+      data: [], // arraybuffers constituting audio data
+      transcription: ''
+    }
+
+    currentRecording.segments.push(currentSegment)
   }
 
-  const finalizeRecording = function() {
-    // TODO
+  const finalizeRecording = async function() {
+    if(!currentRecording)
+      return
+
+    currentRecording.meta.finalized = true
+
+    console.log('finished recording!', currentRecording)
+    await localforage.setItem(objectKey, recordings)
+    currentRecording = undefined
+    currentSegment = undefined
   }
 
   const getRecording = function(key) {
@@ -724,8 +747,22 @@ module.exports = async function audioStorage(options={}) {
     return Object.keys(recordings)
   }
 
+  const setSegmentTranscription = function(transcription) {
+    if(currentSegment)
+      currentSegment.transcription = transcription
+  }
+
   const uploadRecording = function(key) {
-    // TODO: connect to backend and stream the audio up
+    if(!recordings[key])
+      return
+
+    // TODO: upload audio file to backend
+    /*
+    const audioBlob = new Blob(recordings[key].segments, { type: recordings[key].meta.type })
+    const objectURL = URL.createObjectURL(audioBlob)
+    const a = new Audio(objectURL)
+    a.play()
+    */
   }
 
   const pipe = function(destination) {
@@ -739,7 +776,8 @@ module.exports = async function audioStorage(options={}) {
 
   // send audio data to the current segement
   const write = function(data) {
-    // TODO
+    if(currentSegment)
+      currentSegment.data.push(data)
   }
 
   // https://github.com/voiceco/Boswell.ai/issues/276
@@ -750,12 +788,13 @@ module.exports = async function audioStorage(options={}) {
     throw new Error('failed to run demo. could not use INDEXEDDB driver.')
 
   let recordings = await localforage.getItem(objectKey)
+  console.log('sa weeeee:', recordings)
   if(!recordings)
     recordings = {}
 
-  return Object.freeze({ createRecording, createSegment, finalizeRecording,
-    getRecording, listRecordings, uploadRecording, subscribe, unsubscribe,
-    write, pipe, unpipe })
+  return Object.freeze({ clearSegments, createRecording, createSegment, finalizeRecording,
+    getRecording, listRecordings, setSegmentTranscription, uploadRecording, subscribe,
+    unsubscribe, write, pipe, unpipe })
 }
 
 },{"ev-pubsub":17,"localforage":21}],10:[function(require,module,exports){

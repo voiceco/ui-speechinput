@@ -141,7 +141,7 @@ module.exports = function speechInput(options={}) {
   })
 
   const recordingState = function() {
-    let sttResultStream
+    let sttResultStream, currentItem
 
     const _visibilityChanged = function() {
       // when the page is hidden, pause recording
@@ -152,7 +152,7 @@ module.exports = function speechInput(options={}) {
     const enter = async function() {
       document.addEventListener('visibilitychange', _visibilityChanged)
 
-      const currentItem = appendItem()
+      currentItem = appendItem()
       select('#transcription-output').appendChild(currentItem)
 
       recordButton.innerText = 'pause'
@@ -172,6 +172,9 @@ module.exports = function speechInput(options={}) {
         .pipe(mp3Encoder)
         .pipe(speech)
         .pipe(sttResultStream)
+
+      storage.createSegment()
+      mp3Encoder.pipe(storage)
 
       select('button.record').onclick = function(ev) {
         fsm.setState('paused')
@@ -195,6 +198,7 @@ module.exports = function speechInput(options={}) {
     }
 
     const exit = function() {
+      storage.setSegmentTranscription(currentItem.innerText)
       document.removeEventListener('visibilitychange', _visibilityChanged)
       sttResultStream.unsubscribe('data')
       speech.unsubscribe('error')
@@ -204,6 +208,7 @@ module.exports = function speechInput(options={}) {
       mp3Encoder.unpipe()
       mic.stop()
       speech.unpipe()
+      currentItem = undefined
     }
 
     return Object.freeze({ enter, exit })
@@ -243,6 +248,7 @@ module.exports = function speechInput(options={}) {
         'button.record': true
       })
       select('#transcription-output').innerText = ''
+      storage.clearSegments()
       fsm.setState('setup-recording')
     }
   })
@@ -282,6 +288,7 @@ module.exports = function speechInput(options={}) {
       transcriptionPromise.rej = rej
     })
 
+    await storage.finalizeRecording()
     dom.style.opacity = 0
     transcriptionPromise.resolve = undefined
     transcriptionPromise.rej = undefined
