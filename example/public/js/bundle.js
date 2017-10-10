@@ -2,18 +2,20 @@
 'use strict'
 
 const speech = require('../index')
+const uuidV4 = require('uuid/v4')
 
 const s = speech()
 document.body.appendChild(s.dom)
 
 document.querySelector('button').addEventListener('click', async function(ev) {
   this.setAttribute('disabled', true)
-  const text = await s.transcribe()
+  const uuid = uuidV4()
+  const text = await s.transcribe(uuid)
   alert('you said:' + text)
   this.removeAttribute('disabled')
 })
 
-},{"../index":3}],2:[function(require,module,exports){
+},{"../index":6,"uuid/v4":5}],2:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -200,6 +202,99 @@ process.chdir = function (dir) {
 process.umask = function() { return 0; };
 
 },{}],3:[function(require,module,exports){
+/**
+ * Convert array of 16 byte values to UUID string format of the form:
+ * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+ */
+var byteToHex = [];
+for (var i = 0; i < 256; ++i) {
+  byteToHex[i] = (i + 0x100).toString(16).substr(1);
+}
+
+function bytesToUuid(buf, offset) {
+  var i = offset || 0;
+  var bth = byteToHex;
+  return bth[buf[i++]] + bth[buf[i++]] +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] +
+          bth[buf[i++]] + bth[buf[i++]] +
+          bth[buf[i++]] + bth[buf[i++]];
+}
+
+module.exports = bytesToUuid;
+
+},{}],4:[function(require,module,exports){
+(function (global){
+// Unique ID creation requires a high quality random # generator.  In the
+// browser this is a little complicated due to unknown quality of Math.random()
+// and inconsistent support for the `crypto` API.  We do the best we can via
+// feature-detection
+var rng;
+
+var crypto = global.crypto || global.msCrypto; // for IE 11
+if (crypto && crypto.getRandomValues) {
+  // WHATWG crypto RNG - http://wiki.whatwg.org/wiki/Crypto
+  var rnds8 = new Uint8Array(16); // eslint-disable-line no-undef
+  rng = function whatwgRNG() {
+    crypto.getRandomValues(rnds8);
+    return rnds8;
+  };
+}
+
+if (!rng) {
+  // Math.random()-based (RNG)
+  //
+  // If all else fails, use Math.random().  It's fast, but is of unspecified
+  // quality.
+  var rnds = new Array(16);
+  rng = function() {
+    for (var i = 0, r; i < 16; i++) {
+      if ((i & 0x03) === 0) r = Math.random() * 0x100000000;
+      rnds[i] = r >>> ((i & 0x03) << 3) & 0xff;
+    }
+
+    return rnds;
+  };
+}
+
+module.exports = rng;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],5:[function(require,module,exports){
+var rng = require('./lib/rng');
+var bytesToUuid = require('./lib/bytesToUuid');
+
+function v4(options, buf, offset) {
+  var i = buf && offset || 0;
+
+  if (typeof(options) == 'string') {
+    buf = options == 'binary' ? new Array(16) : null;
+    options = null;
+  }
+  options = options || {};
+
+  var rnds = options.random || (options.rng || rng)();
+
+  // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
+  rnds[6] = (rnds[6] & 0x0f) | 0x40;
+  rnds[8] = (rnds[8] & 0x3f) | 0x80;
+
+  // Copy bytes to buffer, if provided
+  if (buf) {
+    for (var ii = 0; ii < 16; ++ii) {
+      buf[i + ii] = rnds[ii];
+    }
+  }
+
+  return buf || bytesToUuid(rnds);
+}
+
+module.exports = v4;
+
+},{"./lib/bytesToUuid":3,"./lib/rng":4}],6:[function(require,module,exports){
 'use strict'
 
 const audioStorage = require('./lib/storage-audio')
@@ -210,6 +305,7 @@ const mp3Stream    = require('./lib/webaudio-mp3-stream')
 const press        = require('./lib/press')
 const recLabel     = require('./lib/ui-recordinglabel')
 const resultStream = require('./lib/watson-stt-result-stream')
+const uuidV4       = require('uuid/v4')
 const watsonSTT    = require('./lib/watson-stt')
 
 
@@ -222,21 +318,21 @@ initial state: IDLE
 |     |     +--+-+              |
 |     |        ^                v
 |     |        |      +---------------+
-|   +-+-----+  +----- |SETUP-RECORDING| <---+-<----------+
-|   |OFFLINE|         +--+------------+     |            |
-|   +---+---+            |                  |            |
+|   +-------+  +----- |SETUP-RECORDING| <---+-<----------+
+|   |OFFLINE|         +---------------+     |            |
+|   +-------+            |                  |            |
 |       |                |                  |            |
 |       |                v                  |            |
 |       |          +---------+          +---+----+       |
 |       +--------> |RECORDING| -------> |CLEARING| <-+   |
-|                  +--+------+          +--------+   |   |
-|                     |     |                        |   |
-|   +----------+      |     |            +------+    |   |
-+-- |FINALIZING| <----+     +----------> |PAUSED| ---+---+
+|                  +---------+          +--------+   |   |
+|                     |    |                         |   |
+|   +----------+      |    |             +------+    |   |
++-- |FINALIZING| <----+    +-----------> |PAUSED| ---+---+
     +----------+                         +------+
-              ^                             |
-              |                             |
-              +-----------------------------+
+          ^                                 |
+          |                                 |
+          +---------------------------------+
 */
 
 function appendItem() {
@@ -467,10 +563,14 @@ module.exports = function speechInput(options={}) {
       fsm.setState('idle')
   })
 
-  const transcribe = async function(uuid) {
+  const transcribe = async function(uuid=uuidV4()) {
     if(!storage)
       storage = await audioStorage({ objectKey: 'boswell-audio' })
 
+    if(transcriptionPromise.resolve)
+      throw new Error('cannot transcribe more than 1 audio at a time')
+
+    storage.createRecording(uuid)
     fsm.setState('idle')
     dom.style.opacity = 1
 
@@ -480,13 +580,15 @@ module.exports = function speechInput(options={}) {
     })
 
     dom.style.opacity = 0
+    transcriptionPromise.resolve = undefined
+    transcriptionPromise.rej = undefined
     return transcription
   }
 
   return Object.freeze({ dom, transcribe })
 }
 
-},{"./lib/finite-state-machine":4,"./lib/press":5,"./lib/storage-audio":6,"./lib/stream-microphone":7,"./lib/ui-recordinglabel":8,"./lib/watson-get-token":9,"./lib/watson-stt":11,"./lib/watson-stt-result-stream":10,"./lib/webaudio-mp3-stream":13}],4:[function(require,module,exports){
+},{"./lib/finite-state-machine":7,"./lib/press":8,"./lib/storage-audio":9,"./lib/stream-microphone":10,"./lib/ui-recordinglabel":11,"./lib/watson-get-token":12,"./lib/watson-stt":14,"./lib/watson-stt-result-stream":13,"./lib/webaudio-mp3-stream":16,"uuid/v4":27}],7:[function(require,module,exports){
 'use strict'
 
 module.exports = function fsm() {
@@ -523,7 +625,7 @@ module.exports = function fsm() {
   return Object.freeze({ addState, getCurrentState, setState })
 }
 
-},{}],5:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 'use strict'
 
 const isTouch = require('is-touch')
@@ -570,7 +672,7 @@ module.exports = {
   }
 }
 
-},{"is-touch":17}],6:[function(require,module,exports){
+},{"is-touch":20}],9:[function(require,module,exports){
 'use strict'
 
 const localforage = require('localforage')
@@ -588,7 +690,7 @@ module.exports = async function audioStorage(options={}) {
         meta: {
           created: 12223232,
           finalized: true,
-          synced: false,
+          syncedToServer: false,
           ...
         },
         segments: [
@@ -599,13 +701,20 @@ module.exports = async function audioStorage(options={}) {
         ]
       }
     }
-
-  methods:
-    create recording
-    create segment
-    clear (delete all segments)
-    finalize recording
   */
+
+  const createRecording = function(uuid) {
+    console.log('rec:', uuid)
+    // TODO
+  }
+
+  const createSegment = function() {
+    // TODO
+  }
+
+  const finalizeRecording = function() {
+    // TODO
+  }
 
   const getRecording = function(key) {
     return recordings[key]
@@ -644,10 +753,12 @@ module.exports = async function audioStorage(options={}) {
   if(!recordings)
     recordings = {}
 
-  return Object.freeze({ getRecording, listRecordings, uploadRecording, subscribe, unsubscribe, write, pipe, unpipe })
+  return Object.freeze({ createRecording, createSegment, finalizeRecording,
+    getRecording, listRecordings, uploadRecording, subscribe, unsubscribe,
+    write, pipe, unpipe })
 }
 
-},{"ev-pubsub":14,"localforage":18}],7:[function(require,module,exports){
+},{"ev-pubsub":17,"localforage":21}],10:[function(require,module,exports){
 'use strict'
 
 const getUserMedia = require('get-user-media-promise')
@@ -757,7 +868,7 @@ module.exports = function microphoneStream() {
   return Object.freeze({ pipe, unpipe, start, stop, sampleRate: audioContext.sampleRate })
 }
 
-},{"ev-pubsub":14,"get-user-media-promise":15}],8:[function(require,module,exports){
+},{"ev-pubsub":17,"get-user-media-promise":18}],11:[function(require,module,exports){
 'use strict'
 
 module.exports = function recordingLabel(dom) {
@@ -813,7 +924,7 @@ module.exports = function recordingLabel(dom) {
   return Object.freeze({ dom, show, hide })
 }
 
-},{}],9:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 'use strict'
 
 const FIFTY_MINUTES_IN_MILLISECONDS = 50 * 60 * 1000
@@ -842,7 +953,7 @@ module.exports = async function getToken(url='/token') {
   return token
 }
 
-},{}],10:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 'use strict'
 
 const pubsub = require('ev-pubsub')
@@ -916,7 +1027,7 @@ module.exports = function watsonSTTResultStream(options={}) {
   return Object.freeze({ clear, subscribe, unsubscribe, write, pipe, unpipe, markBoundary })
 }
 
-},{"ev-pubsub":14}],11:[function(require,module,exports){
+},{"ev-pubsub":17}],14:[function(require,module,exports){
 'use strict'
 
 const fsmFactory = require('./finite-state-machine')
@@ -1169,7 +1280,7 @@ module.exports = function watsonSpeechToText(options={}) {
   return Object.freeze({ close, pipe, recognizeStart, recognizeStop, unpipe, subscribe, unsubscribe, write })
 }
 
-},{"./finite-state-machine":4,"ev-pubsub":14,"lodash.pick":19}],12:[function(require,module,exports){
+},{"./finite-state-machine":7,"ev-pubsub":17,"lodash.pick":22}],15:[function(require,module,exports){
 'use strict'
 
 //const lamejs = require('lamejs')
@@ -1241,7 +1352,7 @@ module.exports = function(self) {
   })
 }
 
-},{}],13:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 'use strict'
 
 const pubsub  = require('ev-pubsub')
@@ -1289,7 +1400,7 @@ module.exports = function webAudioMp3Stream(options={}) {
   return Object.freeze({ pipe, unpipe, write })
 }
 
-},{"./encoder-worker":12,"ev-pubsub":14,"webworkify":22}],14:[function(require,module,exports){
+},{"./encoder-worker":15,"ev-pubsub":17,"webworkify":28}],17:[function(require,module,exports){
 'use strict'
 
 const nextTick    = require('next-tick-2')
@@ -1371,7 +1482,7 @@ module.exports = function pubsub() {
   return Object.freeze({ publish, subscribe, unsubscribe, once })
 }
 
-},{"next-tick-2":20,"remove-array-items":21}],15:[function(require,module,exports){
+},{"next-tick-2":23,"remove-array-items":24}],18:[function(require,module,exports){
 // loosely based on example code at https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
 (function (root) {
   'use strict';
@@ -1482,7 +1593,7 @@ module.exports = function pubsub() {
   }
 }(this));
 
-},{}],16:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 (function (process){
 // Coding standard for this project defined @ https://github.com/MatthewSH/standards/blob/master/JavaScript.md
 'use strict';
@@ -1490,7 +1601,7 @@ module.exports = function pubsub() {
 exports = module.exports = !!(typeof process !== 'undefined' && process.versions && process.versions.node);
 
 }).call(this,require('_process'))
-},{"_process":2}],17:[function(require,module,exports){
+},{"_process":2}],20:[function(require,module,exports){
 (function (global){
 'use strict'
 var isNode = require('is-node')
@@ -1507,11 +1618,11 @@ module.exports = isNode
     false
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"is-node":16}],18:[function(require,module,exports){
+},{"is-node":19}],21:[function(require,module,exports){
 (function (global){
 /*!
     localForage -- Offline Storage, Improved
-    Version 1.5.1
+    Version 1.5.2
     https://localforage.github.io/localForage
     (c) 2013-2017 Mozilla, Apache License 2.0
 */
@@ -3583,13 +3694,7 @@ var DefaultDrivers = {
     LOCALSTORAGE: localStorageWrapper
 };
 
-var DriverType = {
-    INDEXEDDB: asyncStorage._driver,
-    WEBSQL: webSQLStorage._driver,
-    LOCALSTORAGE: localStorageWrapper._driver
-};
-
-var DefaultDriverOrder = [DriverType.INDEXEDDB, DriverType.WEBSQL, DriverType.LOCALSTORAGE];
+var DefaultDriverOrder = [DefaultDrivers.INDEXEDDB._driver, DefaultDrivers.WEBSQL._driver, DefaultDrivers.LOCALSTORAGE._driver];
 
 var LibraryMethods = ['clear', 'getItem', 'iterate', 'key', 'keys', 'length', 'removeItem', 'setItem'];
 
@@ -3637,15 +3742,17 @@ var LocalForage = function () {
     function LocalForage(options) {
         _classCallCheck(this, LocalForage);
 
-        for (var driverTypeKey in DriverType) {
-            if (DriverType.hasOwnProperty(driverTypeKey)) {
-                this[driverTypeKey] = DriverType[driverTypeKey];
+        for (var driverTypeKey in DefaultDrivers) {
+            if (DefaultDrivers.hasOwnProperty(driverTypeKey)) {
+                var driver = DefaultDrivers[driverTypeKey];
+                var driverName = driver._driver;
+                this[driverTypeKey] = driverName;
 
-                if (!DefinedDrivers[driverTypeKey]) {
+                if (!DefinedDrivers[driverName]) {
                     // we don't need to wait for the promise,
                     // since the default drivers can be defined
                     // in a blocking manner
-                    this.defineDriver(DefaultDrivers[driverTypeKey]);
+                    this.defineDriver(driver);
                 }
             }
         }
@@ -3914,7 +4021,7 @@ module.exports = localforage_js;
 },{"3":3}]},{},[4])(4)
 });
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],19:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 (function (global){
 /**
  * lodash (Custom Build) <https://lodash.com/>
@@ -4421,7 +4528,7 @@ var pick = baseRest(function(object, props) {
 module.exports = pick;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],20:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 'use strict'
 
 var ensureCallable = function (fn) {
@@ -4485,7 +4592,7 @@ module.exports = (function () {
 	}
 }())
 
-},{}],21:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 'use strict'
 
 /**
@@ -4515,7 +4622,13 @@ module.exports = function removeItems(arr, startIdx, removeCount)
   arr.length = len
 }
 
-},{}],22:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
+arguments[4][3][0].apply(exports,arguments)
+},{"dup":3}],26:[function(require,module,exports){
+arguments[4][4][0].apply(exports,arguments)
+},{"dup":4}],27:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"./lib/bytesToUuid":25,"./lib/rng":26,"dup":5}],28:[function(require,module,exports){
 var bundleFn = arguments[3];
 var sources = arguments[4];
 var cache = arguments[5];

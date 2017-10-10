@@ -8,6 +8,7 @@ const mp3Stream    = require('./lib/webaudio-mp3-stream')
 const press        = require('./lib/press')
 const recLabel     = require('./lib/ui-recordinglabel')
 const resultStream = require('./lib/watson-stt-result-stream')
+const uuidV4       = require('uuid/v4')
 const watsonSTT    = require('./lib/watson-stt')
 
 
@@ -20,21 +21,21 @@ initial state: IDLE
 |     |     +--+-+              |
 |     |        ^                v
 |     |        |      +---------------+
-|   +-+-----+  +----- |SETUP-RECORDING| <---+-<----------+
-|   |OFFLINE|         +--+------------+     |            |
-|   +---+---+            |                  |            |
+|   +-------+  +----- |SETUP-RECORDING| <---+-<----------+
+|   |OFFLINE|         +---------------+     |            |
+|   +-------+            |                  |            |
 |       |                |                  |            |
 |       |                v                  |            |
 |       |          +---------+          +---+----+       |
 |       +--------> |RECORDING| -------> |CLEARING| <-+   |
-|                  +--+------+          +--------+   |   |
-|                     |     |                        |   |
-|   +----------+      |     |            +------+    |   |
-+-- |FINALIZING| <----+     +----------> |PAUSED| ---+---+
+|                  +---------+          +--------+   |   |
+|                     |    |                         |   |
+|   +----------+      |    |             +------+    |   |
++-- |FINALIZING| <----+    +-----------> |PAUSED| ---+---+
     +----------+                         +------+
-              ^                             |
-              |                             |
-              +-----------------------------+
+          ^                                 |
+          |                                 |
+          +---------------------------------+
 */
 
 function appendItem() {
@@ -265,10 +266,14 @@ module.exports = function speechInput(options={}) {
       fsm.setState('idle')
   })
 
-  const transcribe = async function(uuid) {
+  const transcribe = async function(uuid=uuidV4()) {
     if(!storage)
       storage = await audioStorage({ objectKey: 'boswell-audio' })
 
+    if(transcriptionPromise.resolve)
+      throw new Error('cannot transcribe more than 1 audio at a time')
+
+    storage.createRecording(uuid)
     fsm.setState('idle')
     dom.style.opacity = 1
 
@@ -278,6 +283,8 @@ module.exports = function speechInput(options={}) {
     })
 
     dom.style.opacity = 0
+    transcriptionPromise.resolve = undefined
+    transcriptionPromise.rej = undefined
     return transcription
   }
 
