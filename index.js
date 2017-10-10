@@ -25,6 +25,7 @@ module.exports = function speechInput(options={}) {
   // enable fast-tap behavior for all interactables in this widget
   // https://developers.google.com/web/updates/2013/12/300ms-tap-delay-gone-away
   dom.style.touchAction = 'manipulation'
+  dom.style.opacity = 0 // hidden by default
   dom.classList.add('ui-speechinput')
   dom.innerHTML = `<div id="transcription-output"></div>
 <div class="control-bar" style="display: flex; flex-direction: row">
@@ -40,7 +41,10 @@ module.exports = function speechInput(options={}) {
     enter: function(er) {
       if (er)
         console.error('TODO: display a UI error for:', er)
+
+      select('#transcription-output').innerText = ''
       const button = select('button.record')
+      button.innerText = 'record'
       button.onclick = function(ev) {
         button.setAttribute('disabled', true)
         fsm.setState('setup-recording')
@@ -68,7 +72,11 @@ module.exports = function speechInput(options={}) {
     })
   }
 
-  let mic, mp3Encoder, transcriptionPromise, storage
+  let mic, mp3Encoder, storage
+  const transcriptionPromise = {
+    resolve: undefined,
+    reject: undefined
+  }
   const speech = watsonSTT({ interim_results: true })
 
   const recordButton = dom.querySelector('button.record')
@@ -214,7 +222,7 @@ module.exports = function speechInput(options={}) {
 
   fsm.addState('finalizing', {
     enter: function() {
-      if(transcriptionPromise)
+      if(transcriptionPromise.resolve)
         transcriptionPromise.resolve(select('#transcription-output').innerText)
       fsm.setState('idle')
     }
@@ -231,15 +239,20 @@ module.exports = function speechInput(options={}) {
       fsm.setState('idle')
   })
 
-  fsm.setState('idle')
-
   const transcribe = async function(uuid) {
     if(!storage)
       storage = await audioStorage({ objectKey: 'boswell-audio' })
 
     fsm.setState('idle')
-    transcriptionPromise = new Promise()
-    return await transcriptionPromise
+    dom.style.opacity = 1
+
+    const transcription = await new Promise(function(res, rej) {
+      transcriptionPromise.resolve = res
+      transcriptionPromise.rej = rej
+    })
+
+    dom.style.opacity = 0
+    return transcription
   }
 
   return Object.freeze({ dom, transcribe })
