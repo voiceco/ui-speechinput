@@ -11,6 +11,32 @@ const resultStream = require('./lib/watson-stt-result-stream')
 const watsonSTT    = require('./lib/watson-stt')
 
 
+/*
+finite state machine for speechinput widget
+initial state: IDLE
+
+            +----+
++---> +---> |IDLE+--------------+
+|     |     +--+-+              v
+|     |        ^
+|     |        |      +---------------+
+|   +-+-----+  +----+ |SETUP|RECORDING| <---+ <----------+
+|   |OFFLINE|         +--+------------+     |            |
+|   +---+---+            |                  |            |
+|       |                v                  |            |
+|       |                                   |            |
+|       |          +---------+          +---+----+       |
+|       +--------> |RECORDING+--------> |CLEARING| <-+   |
+|                  +--+-----++          +--------+   |   |
+|                     |     |                        |   |
+|   +----------+      |     |            +------+    |   |
++-+ |FINALIZING| <----+     +----------> |PAUSED| +--+---+
+    +---------++                         +--+---+
+              ^                             |
+              |                             |
+              +-----------------------------+
+*/
+
 function appendItem() {
   const item = document.createElement('p')
   item.classList.add('me-text')
@@ -77,7 +103,7 @@ module.exports = function speechInput(options={}) {
     resolve: undefined,
     reject: undefined
   }
-  const speech = watsonSTT({ interim_results: true })
+  const speech = watsonSTT({ interim_results: true, smart_formatting: true })
 
   const recordButton = dom.querySelector('button.record')
   press.once(recordButton, function(ev) {

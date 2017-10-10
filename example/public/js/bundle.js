@@ -6,6 +6,13 @@ const speech = require('../index')
 const s = speech()
 document.body.appendChild(s.dom)
 
+document.querySelector('button').addEventListener('click', async function(ev) {
+  this.setAttribute('disabled', true)
+  const text = await s.transcribe()
+  alert('you said:' + text)
+  this.removeAttribute('disabled')
+})
+
 },{"../index":3}],2:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
@@ -206,6 +213,32 @@ const resultStream = require('./lib/watson-stt-result-stream')
 const watsonSTT    = require('./lib/watson-stt')
 
 
+/*
+finite state machine for speechinput widget
+initial state: IDLE
+
+            +----+
++---> +---> |IDLE+--------------+
+|     |     +--+-+              v
+|     |        ^
+|     |        |      +---------------+
+|   +-+-----+  +----+ |SETUP|RECORDING| <---+ <----------+
+|   |OFFLINE|         +--+------------+     |            |
+|   +---+---+            |                  |            |
+|       |                v                  |            |
+|       |                                   |            |
+|       |          +---------+          +---+----+       |
+|       +--------> |RECORDING+--------> |CLEARING| <-+   |
+|                  +--+-----++          +--------+   |   |
+|                     |     |                        |   |
+|   +----------+      |     |            +------+    |   |
++-+ |FINALIZING| <----+     +----------> |PAUSED| +--+---+
+    +---------++                         +--+---+
+              ^                             |
+              |                             |
+              +-----------------------------+
+*/
+
 function appendItem() {
   const item = document.createElement('p')
   item.classList.add('me-text')
@@ -220,6 +253,7 @@ module.exports = function speechInput(options={}) {
   // enable fast-tap behavior for all interactables in this widget
   // https://developers.google.com/web/updates/2013/12/300ms-tap-delay-gone-away
   dom.style.touchAction = 'manipulation'
+  dom.style.opacity = 0 // hidden by default
   dom.classList.add('ui-speechinput')
   dom.innerHTML = `<div id="transcription-output"></div>
 <div class="control-bar" style="display: flex; flex-direction: row">
@@ -235,7 +269,10 @@ module.exports = function speechInput(options={}) {
     enter: function(er) {
       if (er)
         console.error('TODO: display a UI error for:', er)
+
+      select('#transcription-output').innerText = ''
       const button = select('button.record')
+      button.innerText = 'record'
       button.onclick = function(ev) {
         button.setAttribute('disabled', true)
         fsm.setState('setup-recording')
@@ -263,8 +300,12 @@ module.exports = function speechInput(options={}) {
     })
   }
 
-  let mic, mp3Encoder, transcriptionPromise, storage
-  const speech = watsonSTT({ interim_results: true })
+  let mic, mp3Encoder, storage
+  const transcriptionPromise = {
+    resolve: undefined,
+    reject: undefined
+  }
+  const speech = watsonSTT({ interim_results: true, smart_formatting: true })
 
   const recordButton = dom.querySelector('button.record')
   press.once(recordButton, function(ev) {
@@ -409,7 +450,7 @@ module.exports = function speechInput(options={}) {
 
   fsm.addState('finalizing', {
     enter: function() {
-      if(transcriptionPromise)
+      if(transcriptionPromise.resolve)
         transcriptionPromise.resolve(select('#transcription-output').innerText)
       fsm.setState('idle')
     }
@@ -426,15 +467,20 @@ module.exports = function speechInput(options={}) {
       fsm.setState('idle')
   })
 
-  fsm.setState('idle')
-
   const transcribe = async function(uuid) {
     if(!storage)
       storage = await audioStorage({ objectKey: 'boswell-audio' })
 
     fsm.setState('idle')
-    transcriptionPromise = new Promise()
-    return await transcriptionPromise
+    dom.style.opacity = 1
+
+    const transcription = await new Promise(function(res, rej) {
+      transcriptionPromise.resolve = res
+      transcriptionPromise.rej = rej
+    })
+
+    dom.style.opacity = 0
+    return transcription
   }
 
   return Object.freeze({ dom, transcribe })
@@ -542,6 +588,7 @@ module.exports = async function audioStorage(options={}) {
         meta: {
           created: 12223232,
           finalized: true,
+          synced: false,
           ...
         },
         segments: [
@@ -774,6 +821,7 @@ const FIFTY_MINUTES_IN_MILLISECONDS = 50 * 60 * 1000
 // get a Watson speech to text token, either from the cache or from the Watson API
 module.exports = async function getToken(url='/token') {
   let token = localStorage.getItem('watson-stt-token')
+
   if(token) {
     token = JSON.parse(token)
     if (Date.now() < token.expiresAt) {
@@ -875,6 +923,22 @@ const fsmFactory = require('./finite-state-machine')
 const pick       = require('lodash.pick')
 const pubsub     = require('ev-pubsub')
 
+
+/*
+finite state machine for Watson speech-to-text socket
+initial state: STOPPED
+
+              +-------+
+   +--------->|STOPPED|-----------+
+   |          +-------+           |
++--+-----+         ^  ^           v
+|STOPPING| <---+   |  |       +--------+
++--------+     |   |  +-------+STARTING|
+               |   |          +--------+
+               | +-------+
+               +-|STARTED|
+                 +-------+
+*/
 
 const OPENING_MESSAGE_PARAMS_ALLOWED = [
   'inactivity_timeout',
