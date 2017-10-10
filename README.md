@@ -17,7 +17,3 @@ const id = uuid() // generate a unique uuid for the audio/text we're recording
 
 const userText = await s.transcribe(id) // transcription === transcribed final text that the user spoke.
 ```
-
-todo:
-* store audio locally
-* upload audio to backend opportunistically
