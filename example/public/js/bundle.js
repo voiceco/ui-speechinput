@@ -305,6 +305,7 @@ const mp3Stream    = require('./lib/webaudio-mp3-stream')
 const press        = require('./lib/press')
 const recLabel     = require('./lib/ui-recordinglabel')
 const resultStream = require('./lib/watson-stt-result-stream')
+const syncManager  = require('./lib/sync-manager')
 const uuidV4       = require('uuid/v4')
 const watsonSTT    = require('./lib/watson-stt')
 
@@ -340,7 +341,10 @@ function appendItem() {
 }
 
 module.exports = function speechInput(options={}) {
-  const watsonTokenURL = options.tokenURL || '/token' //  /speech-to-text/token
+  const watsonTokenURL = options.tokenURL || '/token'
+
+  const sync = syncManager()
+
   const fsm = fsmFactory()
 
   const dom = document.createElement('div')
@@ -593,7 +597,7 @@ module.exports = function speechInput(options={}) {
   return Object.freeze({ dom, transcribe })
 }
 
-},{"./lib/finite-state-machine":7,"./lib/press":8,"./lib/storage-audio":9,"./lib/stream-microphone":10,"./lib/ui-recordinglabel":11,"./lib/watson-get-token":12,"./lib/watson-stt":14,"./lib/watson-stt-result-stream":13,"./lib/webaudio-mp3-stream":16,"uuid/v4":27}],7:[function(require,module,exports){
+},{"./lib/finite-state-machine":7,"./lib/press":8,"./lib/storage-audio":9,"./lib/stream-microphone":10,"./lib/sync-manager":11,"./lib/ui-recordinglabel":13,"./lib/watson-get-token":14,"./lib/watson-stt":16,"./lib/watson-stt-result-stream":15,"./lib/webaudio-mp3-stream":18,"uuid/v4":30}],7:[function(require,module,exports){
 'use strict'
 
 module.exports = function fsm() {
@@ -677,7 +681,7 @@ module.exports = {
   }
 }
 
-},{"is-touch":20}],9:[function(require,module,exports){
+},{"is-touch":22}],9:[function(require,module,exports){
 'use strict'
 
 const localforage = require('localforage')
@@ -785,7 +789,10 @@ module.exports = async function audioStorage(options={}) {
   if(localforage.INDEXEDDB !== localforage.driver())
     throw new Error('failed to run demo. could not use INDEXEDDB driver.')
 
-  let recordings = await localforage.getItem(objectKey)
+
+  let recordings
+  if(objectKey)
+    recordings = await localforage.getItem(objectKey)
   if(!recordings)
     recordings = {}
 
@@ -794,7 +801,7 @@ module.exports = async function audioStorage(options={}) {
     unsubscribe, write, pipe, unpipe })
 }
 
-},{"ev-pubsub":17,"localforage":21}],10:[function(require,module,exports){
+},{"ev-pubsub":19,"localforage":23}],10:[function(require,module,exports){
 'use strict'
 
 const getUserMedia = require('get-user-media-promise')
@@ -904,7 +911,108 @@ module.exports = function microphoneStream() {
   return Object.freeze({ pipe, unpipe, start, stop, sampleRate: audioContext.sampleRate })
 }
 
-},{"ev-pubsub":17,"get-user-media-promise":18}],11:[function(require,module,exports){
+},{"ev-pubsub":19,"get-user-media-promise":20}],11:[function(require,module,exports){
+'use strict'
+
+const fsmFactory = require('../finite-state-machine')
+const lock       = require('lockable-storage').lock
+const uuid       = require('lockable-storage').uniqueId
+const workify    = require('webworkify')
+
+
+/*
+finite state machine for sync-manager
+initial state: IDLE
+
+┌--------┐     ┌--------┐
+|IDLE    |<--->|SYNCING |
+└--------┘     └--------┘
+*/
+module.exports = function syncManager(options={}) {
+  const uid = uuid()  // unique id of the sync manager
+
+  const fsm = fsmFactory()
+
+  function idleState() {
+    let _interval
+
+    const waitTime = 10000
+
+    const _checkIfCanRun = function() {
+      lock('sync-owner-availability', function() {
+        // if sync owner is unset or there's been no sync activity for 30
+        // seconds, become the sync owner
+        const lastSyncTime = sessionStorage.getItem('sync-last-ping') || 0
+        const delta = Date.now() - lastSyncTime
+        if(!sessionStorage.getItem('sync-owner') || delta > 30000) {
+          sessionStorage.setItem('sync-owner', uid)
+          fsm.setState('SYNCING')
+        } else {
+          _interval = setTimeout(_checkIfCanRun, waitTime)
+        }
+      })
+    }
+
+    const enter = function() {
+      _checkIfCanRun()
+    }
+
+    const exit = function() {
+      clearInterval(_interval)
+      _interval = undefined
+    }
+
+    return Object.freeze({ enter, exit })
+  }
+
+  fsm.addState('IDLE', idleState())
+
+  fsm.addState('SYNCING', {
+    enter: function() {
+      syncer.postMessage({ topic: 'init' })
+    },
+    exit: function() {
+      sessionStorage.removeItem('sync-owner')
+    }
+  })
+
+  const syncer = workify(require('./sync-worker'))
+
+  syncer.addEventListener('message', function (ev) {
+    // fired when the worker has finished uploading a file to the backend, or there was an error
+    if(ev.data.cmd === 'done') {
+      fsm.setState('IDLE')
+    } else if(ev.data.cmd === 'ping') {
+      sessionStorage.setItem('sync-last-ping', Date.now())
+    }
+  })
+
+  fsm.setState('IDLE')
+}
+
+},{"../finite-state-machine":7,"./sync-worker":12,"lockable-storage":24,"webworkify":31}],12:[function(require,module,exports){
+'use strict'
+
+const storage = require('../storage-audio')
+
+
+module.exports = function(self) {
+  let s
+
+  const init = async function() {
+    if(!s)
+      s = await storage({ objectKey: 'boswell-audio' })
+    console.log('TODO: start syncing! :) :) :)', s.listRecordings())
+  }
+
+  console.log('setting up sync-worker')
+  self.addEventListener('message', function(e) {
+    if(e.data.topic === 'init')
+      init()
+  })
+}
+
+},{"../storage-audio":9}],13:[function(require,module,exports){
 'use strict'
 
 module.exports = function recordingLabel(dom) {
@@ -960,7 +1068,7 @@ module.exports = function recordingLabel(dom) {
   return Object.freeze({ dom, show, hide })
 }
 
-},{}],12:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 'use strict'
 
 const FIFTY_MINUTES_IN_MILLISECONDS = 50 * 60 * 1000
@@ -989,7 +1097,7 @@ module.exports = async function getToken(url='/token') {
   return token
 }
 
-},{}],13:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 'use strict'
 
 const pubsub = require('ev-pubsub')
@@ -1063,7 +1171,7 @@ module.exports = function watsonSTTResultStream(options={}) {
   return Object.freeze({ clear, subscribe, unsubscribe, write, pipe, unpipe, markBoundary })
 }
 
-},{"ev-pubsub":17}],14:[function(require,module,exports){
+},{"ev-pubsub":19}],16:[function(require,module,exports){
 'use strict'
 
 const fsmFactory = require('./finite-state-machine')
@@ -1076,15 +1184,15 @@ finite state machine for Watson speech-to-text socket
 initial state: STOPPED
 
               ┌-------┐
-   ┌--------->|STOPPED├------┐
-   |          └-------┘      |
-┌--┴-----┐       ^  ^        v
-|STOPPING|<---┐  |  |     ┌--------┐
-└--------┘    |  |  └-----┤STARTING|
-              |  |        └--------┘
-              | ┌┴------┐
-              └-┤STARTED|
-                └-------┘
+     ┌------->|STOPPED├----┐
+     |        └-------┘    |
+┌----┴---┐      ^  ^       v
+|STOPPING|<-┐   |  |  ┌--------┐
+└--------┘  |   |  └--┤STARTING|
+            |   |     └--------┘
+            | ┌-┴-----┐
+            └-┤STARTED|
+              └-------┘
 */
 
 const OPENING_MESSAGE_PARAMS_ALLOWED = [
@@ -1316,7 +1424,7 @@ module.exports = function watsonSpeechToText(options={}) {
   return Object.freeze({ close, pipe, recognizeStart, recognizeStop, unpipe, subscribe, unsubscribe, write })
 }
 
-},{"./finite-state-machine":7,"ev-pubsub":17,"lodash.pick":22}],15:[function(require,module,exports){
+},{"./finite-state-machine":7,"ev-pubsub":19,"lodash.pick":25}],17:[function(require,module,exports){
 'use strict'
 
 //const lamejs = require('lamejs')
@@ -1388,7 +1496,7 @@ module.exports = function(self) {
   })
 }
 
-},{}],16:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 'use strict'
 
 const pubsub  = require('ev-pubsub')
@@ -1436,7 +1544,7 @@ module.exports = function webAudioMp3Stream(options={}) {
   return Object.freeze({ pipe, unpipe, write })
 }
 
-},{"./encoder-worker":15,"ev-pubsub":17,"webworkify":28}],17:[function(require,module,exports){
+},{"./encoder-worker":17,"ev-pubsub":19,"webworkify":31}],19:[function(require,module,exports){
 'use strict'
 
 const nextTick    = require('next-tick-2')
@@ -1518,7 +1626,7 @@ module.exports = function pubsub() {
   return Object.freeze({ publish, subscribe, unsubscribe, once })
 }
 
-},{"next-tick-2":23,"remove-array-items":24}],18:[function(require,module,exports){
+},{"next-tick-2":26,"remove-array-items":27}],20:[function(require,module,exports){
 // loosely based on example code at https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
 (function (root) {
   'use strict';
@@ -1629,7 +1737,7 @@ module.exports = function pubsub() {
   }
 }(this));
 
-},{}],19:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 (function (process){
 // Coding standard for this project defined @ https://github.com/MatthewSH/standards/blob/master/JavaScript.md
 'use strict';
@@ -1637,7 +1745,7 @@ module.exports = function pubsub() {
 exports = module.exports = !!(typeof process !== 'undefined' && process.versions && process.versions.node);
 
 }).call(this,require('_process'))
-},{"_process":2}],20:[function(require,module,exports){
+},{"_process":2}],22:[function(require,module,exports){
 (function (global){
 'use strict'
 var isNode = require('is-node')
@@ -1654,7 +1762,7 @@ module.exports = isNode
     false
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"is-node":19}],21:[function(require,module,exports){
+},{"is-node":21}],23:[function(require,module,exports){
 (function (global){
 /*!
     localForage -- Offline Storage, Improved
@@ -4057,7 +4165,147 @@ module.exports = localforage_js;
 },{"3":3}]},{},[4])(4)
 });
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],22:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
+/**
+Copyright (c) 2012, Benjamin Dumke-von der Ehe
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
+
+var LockableStorage,
+    randomNumber = function () {
+        return Math.random() * 1000000000 | 0;
+    },
+    uniqueId = Date.now() + ":" + randomNumber();
+
+module.exports = LockableStorage = {
+
+    lock: function (key, callback, maxDuration) {
+        lockImpl(key, callback, maxDuration, false);
+    },
+
+    trySyncLock: function (key, callback, maxDuration) {
+        return lockImpl(key, callback, maxDuration, true);
+    },
+
+    uniqueId: function() {
+        return uniqueId;
+    },
+};
+
+function getter(lskey) {
+    return function () {
+        var value = localStorage[lskey];
+        if (!value)
+            return null;
+
+        var splitted = value.split(/\|/);
+        if (parseInt(splitted[1]) < Date.now()) {
+            return null;
+        }
+        return splitted[0];
+    }
+}
+
+function _mutexTransaction(key, callback, synchronous) {
+    var xKey = key + "__MUTEX_x",
+        yKey = key + "__MUTEX_y",
+        getY = getter(yKey);
+
+    function criticalSection() {
+        try {
+            callback();
+        } finally {
+            localStorage.removeItem(yKey);
+        }
+    }
+
+    localStorage[xKey] = uniqueId;
+    if (getY()) {
+        if (!synchronous)
+            setTimeout(function () { _mutexTransaction(key, callback); }, 0);
+        return false;
+    }
+    localStorage[yKey] = uniqueId + "|" + (Date.now() + 40);
+
+    if (localStorage[xKey] !== uniqueId) {
+        if (!synchronous) {
+            setTimeout(function () {
+                if (getY() !== uniqueId) {
+                    setTimeout(function () { _mutexTransaction(key, callback); }, 0);
+                } else {
+                    criticalSection();
+                }
+            }, 50)
+        }
+        return false;
+    } else {
+        criticalSection();
+        return true;
+    }
+}
+
+function lockImpl(key, callback, maxDuration, synchronous) {
+
+    maxDuration = maxDuration || 5000;
+
+    var mutexKey = key + "__MUTEX",
+        getMutex = getter(mutexKey),
+        mutexValue = uniqueId + ":" + randomNumber() + "|" + (Date.now() + maxDuration);
+
+    function restart () {
+        setTimeout(function () { lockImpl(key, callback, maxDuration); }, 10);
+    }
+
+    if (getMutex()) {
+        if (!synchronous)
+            restart();
+        return false;
+    }
+
+    var aquiredSynchronously = _mutexTransaction(key, function () {
+        if (getMutex()) {
+            if (!synchronous)
+                restart();
+            return false;
+        }
+        localStorage[mutexKey] = mutexValue;
+        if (!synchronous)
+            setTimeout(mutexAquired, 0)
+    }, synchronous);
+
+    if (synchronous && aquiredSynchronously) {
+        mutexAquired();
+        return true;
+    }
+    return false;
+    function mutexAquired() {
+        try {
+            callback();
+        } finally {
+            _mutexTransaction(key, function () {
+                if (localStorage[mutexKey] !== mutexValue)
+                    throw key + " was locked by a different process while I held the lock"
+
+                localStorage.removeItem(mutexKey);
+            });
+        }
+    }
+}
+
+},{}],25:[function(require,module,exports){
 (function (global){
 /**
  * lodash (Custom Build) <https://lodash.com/>
@@ -4564,7 +4812,7 @@ var pick = baseRest(function(object, props) {
 module.exports = pick;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],23:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 'use strict'
 
 var ensureCallable = function (fn) {
@@ -4628,7 +4876,7 @@ module.exports = (function () {
 	}
 }())
 
-},{}],24:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 'use strict'
 
 /**
@@ -4658,13 +4906,13 @@ module.exports = function removeItems(arr, startIdx, removeCount)
   arr.length = len
 }
 
-},{}],25:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 arguments[4][3][0].apply(exports,arguments)
-},{"dup":3}],26:[function(require,module,exports){
+},{"dup":3}],29:[function(require,module,exports){
 arguments[4][4][0].apply(exports,arguments)
-},{"dup":4}],27:[function(require,module,exports){
+},{"dup":4}],30:[function(require,module,exports){
 arguments[4][5][0].apply(exports,arguments)
-},{"./lib/bytesToUuid":25,"./lib/rng":26,"dup":5}],28:[function(require,module,exports){
+},{"./lib/bytesToUuid":28,"./lib/rng":29,"dup":5}],31:[function(require,module,exports){
 var bundleFn = arguments[3];
 var sources = arguments[4];
 var cache = arguments[5];

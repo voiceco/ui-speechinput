@@ -8,6 +8,7 @@ const mp3Stream    = require('./lib/webaudio-mp3-stream')
 const press        = require('./lib/press')
 const recLabel     = require('./lib/ui-recordinglabel')
 const resultStream = require('./lib/watson-stt-result-stream')
+const syncManager  = require('./lib/sync-manager')
 const uuidV4       = require('uuid/v4')
 const watsonSTT    = require('./lib/watson-stt')
 
@@ -43,7 +44,10 @@ function appendItem() {
 }
 
 module.exports = function speechInput(options={}) {
-  const watsonTokenURL = options.tokenURL || '/token' //  /speech-to-text/token
+  const watsonTokenURL = options.tokenURL || '/token'
+
+  const sync = syncManager()
+
   const fsm = fsmFactory()
 
   const dom = document.createElement('div')
