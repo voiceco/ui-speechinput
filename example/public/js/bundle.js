@@ -467,13 +467,13 @@ module.exports = function speechInput(options={}) {
 
       await mic.start()
 
+      storage.createSegment()
+      mp3Encoder.pipe(storage)
+
       mic
         .pipe(mp3Encoder)
         .pipe(speech)
         .pipe(sttResultStream)
-
-      storage.createSegment()
-      mp3Encoder.pipe(storage)
 
       select('button.record').onclick = function(ev) {
         fsm.setState('paused')
@@ -573,7 +573,7 @@ module.exports = function speechInput(options={}) {
 
   const transcribe = async function(uuid=uuidV4()) {
     if(!storage)
-      storage = await audioStorage({ objectKey: 'boswell-audio' })
+      storage = await audioStorage({ objectPrefix: 'boswell-audio' })
 
     if(transcriptionPromise.resolve)
       throw new Error('cannot transcribe more than 1 audio at a time')
@@ -688,17 +688,27 @@ const localforage = require('localforage')
 const pubsub      = require('ev-pubsub')
 
 
+/*
+const audioBlob = new Blob(recordings[key].segments, { type: recordings[key].meta.type })
+const objectURL = URL.createObjectURL(audioBlob)
+const a = new Audio(objectURL)
+a.play()
+*/
+
 module.exports = async function audioStorage(options={}) {
-  const { objectKey } = options
+  const { objectPrefix } = options
   const { publish, subscribe, unsubscribe } = pubsub()
 
   let currentRecording, currentSegment
 
   const createRecording = async function(uuid) {
-    if(recordings[uuid])
+    currentRecording = await getRecording(uuid)
+
+    if(currentRecording)
       throw new Error('could not create new recording: ' + uuid + ' already exists in storage')
 
-    recordings[uuid] = currentRecording = {
+    currentRecording = {
+      uuid,
       meta: {
         created: Date.now(),
         finalized: false,
@@ -735,36 +745,40 @@ module.exports = async function audioStorage(options={}) {
 
     currentRecording.meta.finalized = true
 
+    // TODO: multiple windows doing recording will break things (e.g., record
+    //       in this window, it gets saved to indexeddb, the other window now
+    //       has an outdated copy of the recording array)
     console.log('finished recording!', currentRecording)
-    await localforage.setItem(objectKey, recordings)
+    await localforage.setItem(`${objectPrefix}-${currentRecording.uuid}`, currentRecording)
     currentRecording = undefined
     currentSegment = undefined
   }
 
-  const getRecording = function(key) {
-    return recordings[key]
+  const getRecording = async function(uuid) {
+    const key = uuid.indexOf(objectPrefix) === 0 ? uuid : `${objectPrefix}-${uuid}`
+    console.log('called getRecording:', uuid)
+    return localforage.getItem(key)
   }
 
-  const listRecordings = function() {
-    return Object.keys(recordings)
+  const listRecordings = async function() {
+    const keys = await localforage.keys()
+    return keys.filter(function(k) {
+      return k.indexOf(objectPrefix) === 0
+    })
+  }
+
+  const markUploaded = async function(audioId) {
+    const recording = await getRecording(audioId)
+    if(recording) {
+      recording.meta.syncedToServer = true
+      console.log('marking upploaded:', recording.uuid)
+      await localforage.setItem(`${objectPrefix}-${recording.uuid}`, recording)
+    }
   }
 
   const setSegmentTranscription = function(transcription) {
     if(currentSegment)
       currentSegment.transcription = transcription
-  }
-
-  const uploadRecording = function(key) {
-    if(!recordings[key])
-      return
-
-    // TODO: upload audio file to backend
-    /*
-    const audioBlob = new Blob(recordings[key].segments, { type: recordings[key].meta.type })
-    const objectURL = URL.createObjectURL(audioBlob)
-    const a = new Audio(objectURL)
-    a.play()
-    */
   }
 
   const pipe = function(destination) {
@@ -778,8 +792,10 @@ module.exports = async function audioStorage(options={}) {
 
   // send audio data to the current segement
   const write = function(data) {
-    if(currentSegment)
-      currentSegment.data.push(data)
+    if(currentSegment && data.byteLength) {
+      console.log('writing data:', data instanceof ArrayBuffer, data.byteLength)
+      currentSegment.data.push(new Uint8Array(data))
+    }
   }
 
   // https://github.com/voiceco/Boswell.ai/issues/276
@@ -789,16 +805,10 @@ module.exports = async function audioStorage(options={}) {
   if(localforage.INDEXEDDB !== localforage.driver())
     throw new Error('failed to run demo. could not use INDEXEDDB driver.')
 
-
-  let recordings
-  if(objectKey)
-    recordings = await localforage.getItem(objectKey)
-
-  if(!recordings)
-    recordings = {}
+  //await localforage.clear()
 
   return Object.freeze({ clearSegments, createRecording, createSegment, finalizeRecording,
-    getRecording, listRecordings, setSegmentTranscription, uploadRecording, subscribe,
+    getRecording, listRecordings, setSegmentTranscription, subscribe, markUploaded,
     unsubscribe, write, pipe, unpipe })
 }
 
@@ -954,7 +964,7 @@ module.exports = function syncManager(options={}) {
     }
 
     const enter = function() {
-      _checkIfCanRun()
+      _interval = setTimeout(_checkIfCanRun, waitTime)
     }
 
     const exit = function() {
@@ -996,13 +1006,85 @@ module.exports = function syncManager(options={}) {
 const storage = require('../storage-audio')
 
 
+let t= 14
+let b=16
 module.exports = function(self) {
   let s
 
+  const upload = async function (audioId) {
+    //console.log('uploading audioId:', audioId)
+    return new Promise(async function(resolve, reject) {
+      const request = new XMLHttpRequest()
+      console.log('opening /raw_upload ?')
+      request.open('POST', 'https://localhost:3001/raw_upload', true)
+
+      let progress = 0
+
+      request.upload.onprogress = function(e) {
+        if (e.lengthComputable) {
+          progress = (e.loaded / e.total) * 100
+          console.log('progress:', progress)
+          // indicate the upload process is still active
+          self.postMessage({ cmd: 'ping' })
+        }
+      }
+
+      request.onerror = reject
+      request.onload = async function() {
+        console.log('huh', audioId)
+        await s.markUploaded(audioId)
+        resolve()
+      }
+
+      // sends as multipart/form-data by default, which is what we want, because
+      // application/x-www-form-urlencoded is URL encoded and wastes bandwidth
+      const formData = new FormData()
+
+      const recording = await s.getRecording(audioId)
+      const parts = []
+      recording.segments.forEach(function(s) {
+        parts.push(s.data)
+      })
+
+      const audioBlob = new Blob(parts, { type: recording.meta.type })
+
+      console.log('constructed blob', audioBlob, 'type', recording.meta.type)
+
+      formData.append('rawAudio', audioBlob, audioId)
+      request.send(formData)
+      //request.send(audioBlob)
+    })
+  }
+
+  const chooseRandomId = async function() {
+    const recordings = await s.listRecordings()
+    const readyToSend = []
+    for(let i=0; i < recordings.length; i++) {
+      let audioId = recordings[i]
+      let r = await s.getRecording(audioId)
+      console.log('rando id:', audioId, 'r:', r)
+      if(r.meta.finalized && !r.meta.syncedToServer)
+        readyToSend.push(r)
+    }
+
+    if(readyToSend.length) {
+      const idx = Math.floor(Math.random() * readyToSend.length)
+      return readyToSend[idx].uuid
+    }
+  }
+
   const init = async function() {
     if(!s)
-      s = await storage({ objectKey: 'boswell-audio' })
-    console.log('current recordings:', s.listRecordings())
+      s = await storage({ objectPrefix: 'boswell-audio' })
+
+    console.log('attempting sync')
+    // pick a random story which is finalized but not uploaded
+    const id = await chooseRandomId()
+    console.log('oyyyy id:', id)
+    if(id)
+      await upload(id)
+
+    self.postMessage({ cmd: 'done' })
   }
 
   console.log('setting up sync-worker')
@@ -1525,7 +1607,7 @@ module.exports = function webAudioMp3Stream(options={}) {
       publish('data', ev.data.buf)
   })
 
-  // < 32 kbps mp3 encoding doesn't seem to encode properly on android or ios
+  // <= 32 kbps mp3 encoding doesn't seem to encode properly on android or ios
   encoder.postMessage({ topic: 'init', sampleRate, bitRate: 64, lameUrl })
 
   const pipe = function(destination) {

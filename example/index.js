@@ -11,6 +11,7 @@ const app = express()
 
 app.use(express.static('public'))
 
+app.post('/raw_upload', require('./lib/route-audio-upload'))
 app.get('/token', require('./lib/route-watson-token'))
 
 let protocol = 'http'

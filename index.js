@@ -170,13 +170,13 @@ module.exports = function speechInput(options={}) {
 
       await mic.start()
 
+      storage.createSegment()
+      mp3Encoder.pipe(storage)
+
       mic
         .pipe(mp3Encoder)
         .pipe(speech)
         .pipe(sttResultStream)
-
-      storage.createSegment()
-      mp3Encoder.pipe(storage)
 
       select('button.record').onclick = function(ev) {
         fsm.setState('paused')
@@ -276,7 +276,7 @@ module.exports = function speechInput(options={}) {
 
   const transcribe = async function(uuid=uuidV4()) {
     if(!storage)
-      storage = await audioStorage({ objectKey: 'boswell-audio' })
+      storage = await audioStorage({ objectPrefix: 'boswell-audio' })
 
     if(transcriptionPromise.resolve)
       throw new Error('cannot transcribe more than 1 audio at a time')
