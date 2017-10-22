@@ -744,11 +744,6 @@ module.exports = async function audioStorage(options={}) {
       return
 
     currentRecording.meta.finalized = true
-
-    // TODO: multiple windows doing recording will break things (e.g., record
-    //       in this window, it gets saved to indexeddb, the other window now
-    //       has an outdated copy of the recording array)
-    console.log('finished recording!', currentRecording)
     await localforage.setItem(`${objectPrefix}-${currentRecording.uuid}`, currentRecording)
     currentRecording = undefined
     currentSegment = undefined
@@ -756,7 +751,6 @@ module.exports = async function audioStorage(options={}) {
 
   const getRecording = async function(uuid) {
     const key = uuid.indexOf(objectPrefix) === 0 ? uuid : `${objectPrefix}-${uuid}`
-    console.log('called getRecording:', uuid)
     return localforage.getItem(key)
   }
 
@@ -771,7 +765,6 @@ module.exports = async function audioStorage(options={}) {
     const recording = await getRecording(audioId)
     if(recording) {
       recording.meta.syncedToServer = true
-      console.log('marking upploaded:', recording.uuid)
       await localforage.setItem(`${objectPrefix}-${recording.uuid}`, recording)
     }
   }
@@ -792,10 +785,8 @@ module.exports = async function audioStorage(options={}) {
 
   // send audio data to the current segement
   const write = function(data) {
-    if(currentSegment && data.byteLength) {
-      console.log('writing data:', data instanceof ArrayBuffer, data.byteLength)
-      currentSegment.data.push(new Uint8Array(data))
-    }
+    if(currentSegment && data.byteLength)
+      currentSegment.data.push(data)
   }
 
   // https://github.com/voiceco/Boswell.ai/issues/276
@@ -1019,7 +1010,6 @@ module.exports = function(self) {
       request.open('POST', 'https://localhost:3001/raw_upload', true)
 
       let progress = 0
-
       request.upload.onprogress = function(e) {
         if (e.lengthComputable) {
           progress = (e.loaded / e.total) * 100
@@ -1029,30 +1019,30 @@ module.exports = function(self) {
         }
       }
 
-      request.onerror = reject
-      request.onload = async function() {
-        console.log('huh', audioId)
+      request.upload.onerror = reject
+      request.upload.onload = async function() {
         await s.markUploaded(audioId)
         resolve()
       }
 
       // sends as multipart/form-data by default, which is what we want, because
       // application/x-www-form-urlencoded is URL encoded and wastes bandwidth
-      const formData = new FormData()
+      //const formData = new FormData()
 
       const recording = await s.getRecording(audioId)
       const parts = []
       recording.segments.forEach(function(s) {
-        parts.push(s.data)
+        s.data.forEach(function(s2) {
+          parts.push(s2)
+        })
       })
 
       const audioBlob = new Blob(parts, { type: recording.meta.type })
-
       console.log('constructed blob', audioBlob, 'type', recording.meta.type)
 
-      formData.append('rawAudio', audioBlob, audioId)
-      request.send(formData)
-      //request.send(audioBlob)
+      //formData.append('rawAudio', audioBlob, audioId)
+      //request.send(formData)
+      request.send(audioBlob)
     })
   }
 
@@ -1062,7 +1052,6 @@ module.exports = function(self) {
     for(let i=0; i < recordings.length; i++) {
       let audioId = recordings[i]
       let r = await s.getRecording(audioId)
-      console.log('rando id:', audioId, 'r:', r)
       if(r.meta.finalized && !r.meta.syncedToServer)
         readyToSend.push(r)
     }
@@ -1080,7 +1069,6 @@ module.exports = function(self) {
     console.log('attempting sync')
     // pick a random story which is finalized but not uploaded
     const id = await chooseRandomId()
-    console.log('oyyyy id:', id)
     if(id)
       await upload(id)
 
