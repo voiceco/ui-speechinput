@@ -793,6 +793,7 @@ module.exports = async function audioStorage(options={}) {
   let recordings
   if(objectKey)
     recordings = await localforage.getItem(objectKey)
+
   if(!recordings)
     recordings = {}
 
@@ -924,9 +925,9 @@ const workify    = require('webworkify')
 finite state machine for sync-manager
 initial state: IDLE
 
-┌--------┐     ┌--------┐
-|IDLE    |<--->|SYNCING |
-└--------┘     └--------┘
+┌----┐     ┌-------┐
+|IDLE|<--->|SYNCING|
+└----┘     └-------┘
 */
 module.exports = function syncManager(options={}) {
   const uid = uuid()  // unique id of the sync manager
@@ -935,7 +936,6 @@ module.exports = function syncManager(options={}) {
 
   function idleState() {
     let _interval
-
     const waitTime = 10000
 
     const _checkIfCanRun = function() {
@@ -1002,7 +1002,7 @@ module.exports = function(self) {
   const init = async function() {
     if(!s)
       s = await storage({ objectKey: 'boswell-audio' })
-    console.log('TODO: start syncing! :) :) :)', s.listRecordings())
+    console.log('current recordings:', s.listRecordings())
   }
 
   console.log('setting up sync-worker')
