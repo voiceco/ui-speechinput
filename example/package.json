@@ -4,26 +4,17 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "deploy": "now && now alias $(pbpaste) speechui.voiceco.ai",
-    "start": "node index.js",
-    "start-dev": "npm run watch & node index.js --https",
+    "start": "serve public/",
+    "start-dev": "npm run watch & serve --ssl public/",
     "watch": "watchify client.js -v -o public/js/bundle.js --verbose"
   },
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "aws-sdk": "^2.138.0",
-    "cors": "^2.8.4",
-    "dotenv": "^4.0.0",
-    "express": "^4.16.2",
-    "helmet": "^3.9.0",
-    "mp3-duration": "^1.1.0",
-    "validator": "^9.0.0",
-    "watson-developer-cloud": "^2.40.0"
+    "serve": "^6.3.1"
   },
   "devDependencies": {
-    "openssl-self-signed-certificate": "^1.1.6",
     "watchify": "^3.9.0"
   }
 }

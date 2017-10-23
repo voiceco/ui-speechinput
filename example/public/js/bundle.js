@@ -249,7 +249,7 @@ function appendItem() {
 }
 
 module.exports = function speechInput(options={}) {
-  const { key, secret, tokenURL } = options
+  const { key, secret } = options
 
   if(!key)
     throw new Error('you must specify an api key')
@@ -257,9 +257,9 @@ module.exports = function speechInput(options={}) {
   if(!secret)
     throw new Error('you must specify an api secret')
 
-  const watsonTokenURL = tokenURL || '/token'
+  const apiHost = 'https://audio.voiceco.ai'
   const objectPrefix = 'voiceco-' + key
-  const sync = syncManager({ objectPrefix })
+  const sync = syncManager({ objectPrefix, apiHost })
   const fsm = fsmFactory()
 
   const dom = document.createElement('div')
@@ -345,7 +345,7 @@ module.exports = function speechInput(options={}) {
       })
 
       try {
-        const token = await getToken(watsonTokenURL)
+        const token = await getToken(apiHost + '/token')
         speech.recognizeStart(token)
         fsm.setState('recording')
       } catch(er) {
@@ -486,7 +486,6 @@ module.exports = function speechInput(options={}) {
       fsm.setState('idle')
   })
 
-  // TODO: return result object which includes transcribed text, audioId, and meta data
   const transcribe = async function(userMeta={}) {
     if(!storage)
       storage = await audioStorage({ objectPrefix })
@@ -852,14 +851,12 @@ initial state: IDLE
 |IDLE|<--->|SYNCING|
 └----┘     └-------┘
 */
+
 module.exports = function syncManager(options={}) {
-  const { objectPrefix } = options
+  const { objectPrefix, apiHost } = options
   const uid = uuid()  // unique id of the sync manager
 
   const fsm = fsmFactory()
-
-  // TODO: replace this hardcoded URL with api endpoint
-  const apiHost = 'https://localhost:3001'
 
   function idleState() {
     let _interval
