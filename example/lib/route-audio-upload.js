@@ -13,8 +13,8 @@ const TWO_MONTHS_IN_SECONDS = '5184000'
 const UUID_VERSION = 4
 
 // TODO: trim silence with sox:
-//         sox inputfile.mp3 outputfile.mp3 silence 1 0.1 0.1% reverse silence 1 0.1 0.1% reverse
-//       https://marcelog.github.io/articles/static_sox_transcoding_lambda_mp3.html
+//   sox inputfile.mp3 outputfile.mp3 silence 1 0.1 0.1% reverse silence 1 0.1 0.1% reverse
+//   https://marcelog.github.io/articles/static_sox_transcoding_lambda_mp3.html
 
 module.exports = function audioUpload(req, res) {
   // TODO: support custom metadata

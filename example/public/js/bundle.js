@@ -935,6 +935,9 @@ module.exports = function syncManager(options={}) {
 
   const fsm = fsmFactory()
 
+  // TODO: replace this hardcoded URL with api endpoint
+  const apiHost = 'https://localhost:3001'
+
   function idleState() {
     let _interval
     const waitTime = 30000
@@ -970,7 +973,7 @@ module.exports = function syncManager(options={}) {
 
   fsm.addState('SYNCING', {
     enter: function() {
-      syncer.postMessage({ topic: 'init' })
+      syncer.postMessage({ topic: 'init', apiHost })
     },
     exit: function() {
       sessionStorage.removeItem('sync-owner')
@@ -1000,10 +1003,10 @@ const storage = require('../storage-audio')
 module.exports = function(self) {
   let s
 
-  const upload = async function (audioId) {
+  const upload = async function (audioId, apiHost) {
     return new Promise(async function(resolve, reject) {
       const request = new XMLHttpRequest()
-      request.open('PUT', 'https://localhost:3001/audio/'+audioId+'?encoding=mp3', true)
+      request.open('PUT', apiHost + '/audio/' + audioId + '?encoding=mp3', true)
 
       let progress = 0
       request.upload.onprogress = function(e) {
@@ -1015,10 +1018,21 @@ module.exports = function(self) {
         }
       }
 
-      request.upload.onerror = reject
-      request.upload.onload = async function() {
-        await s.markUploaded(audioId)
-        resolve()
+      request.onload = async function() {
+        const resp = this.response
+        if (this.status >= 200 && this.status < 400) {
+          await s.markUploaded(audioId)
+          resolve(resp)
+        } else {
+          // reached target server, but it returned an error
+          reject(resp)
+        }
+      }
+
+      request.onerror = function() {
+        // There was a connection error of some sort
+        console.log('connection error of some sort')
+        reject()
       }
 
       const recording = await s.getRecording(audioId)
@@ -1031,7 +1045,6 @@ module.exports = function(self) {
 
       //console.log('constructed blob', audioBlob, 'type', recording.meta.type)
       const audioBlob = new Blob(parts, { type: recording.meta.type })
-
       request.send(audioBlob)
 
       // an alternative method to send the audio blob:
@@ -1059,24 +1072,26 @@ module.exports = function(self) {
     }
   }
 
-  const init = async function() {
+  const init = async function(apiHost) {
     if(!s)
       s = await storage({ objectPrefix: 'boswell-audio' })
 
     // pick a random story which is finalized but not uploaded
     const id = await chooseRandomId()
 
-    // TODO: handle failures (exception or non-200 status code)
-    if(id)
-      await upload(id)
-
-    self.postMessage({ cmd: 'done' })
+    try {
+      if(id)
+        await upload(id, apiHost)
+      self.postMessage({ cmd: 'done' })
+    } catch(er) {
+      self.postMessage({ cmd: 'done', er })
+    }
   }
 
   console.log('setting up sync-worker')
   self.addEventListener('message', function(e) {
     if(e.data.topic === 'init')
-      init()
+      init(e.data.apiHost)
   })
 }
 

@@ -22,6 +22,7 @@ app.get('/token', require('./lib/route-watson-token'))
 // TODO: implement these routes
 //  app.get('/audio', require('./lib/list-audio'))
 //  app.get('/audio/:audioId', require('./lib/get-audio'))
+//  app.post('/audio/:audioId/meta', require('./lib/update-audio-metadata'))
 
 let protocol = 'http'
 
