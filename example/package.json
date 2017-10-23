@@ -23,6 +23,7 @@
     "watson-developer-cloud": "^2.40.0"
   },
   "devDependencies": {
+    "openssl-self-signed-certificate": "^1.1.6",
     "watchify": "^3.9.0"
   }
 }

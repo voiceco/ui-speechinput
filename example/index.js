@@ -24,16 +24,17 @@ app.get('/token', require('./lib/route-watson-token'))
 //  app.get('/audio/:audioId', require('./lib/get-audio'))
 //  app.post('/audio/:audioId/meta', require('./lib/update-audio-metadata'))
 
-let protocol = 'http'
+const protocol = process.argv[2] === '--https' ? 'https' : 'http'
 
-if(process.argv[2] === '--https') {
-    const options = {
-    key: fs.readFileSync('/etc/ssl/certs/saymosaic.key'),
-    cert: fs.readFileSync('/etc/ssl/certs/saymosaic.crt')
+if(protocol === 'https') {
+  const selfSigned = require('openssl-self-signed-certificate')
+
+  const options = {
+    key: selfSigned.key,
+    cert: selfSigned.cert
   }
-  const address = undefined
+  const address = undefined // force binding to all interfaces by leaving address blank
   https.createServer(options, app).listen(PORT, address)
-  protocol = 'https'
 } else {
   app.listen(PORT)
 }
