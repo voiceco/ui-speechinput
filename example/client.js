@@ -4,7 +4,7 @@ const speech = require('../index')
 
 
 const output = document.getElementById('output')
-const s = speech()
+const s = speech({ key: 'myapi', secret: 'mysuper secret key' })
 document.body.appendChild(s.dom)
 
 document.querySelector('button').addEventListener('click', async function(ev) {

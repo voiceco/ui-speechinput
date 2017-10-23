@@ -5,7 +5,7 @@ const speech = require('../index')
 
 
 const output = document.getElementById('output')
-const s = speech()
+const s = speech({ key: 'myapi', secret: 'mysuper secret key' })
 document.body.appendChild(s.dom)
 
 document.querySelector('button').addEventListener('click', async function(ev) {
@@ -249,9 +249,18 @@ function appendItem() {
 }
 
 module.exports = function speechInput(options={}) {
-  const watsonTokenURL = options.tokenURL || '/token'
+  const { key, secret, tokenURL } = options
 
-  const sync = syncManager()
+  if(!key)
+    throw new Error('you must specify an api key')
+
+  if(!secret)
+    throw new Error('you must specify an api secret')
+
+  const watsonTokenURL = tokenURL || '/token'
+  const objectPrefix = 'voiceco-' + key
+  console.log('prefix:', objectPrefix)
+  const sync = syncManager({ objectPrefix })
 
   const fsm = fsmFactory()
 
@@ -479,9 +488,10 @@ module.exports = function speechInput(options={}) {
       fsm.setState('idle')
   })
 
+  // TODO: return result object which includes transcribed text, audioId, and meta data
   const transcribe = async function(userMeta={}) {
     if(!storage)
-      storage = await audioStorage({ objectPrefix: 'boswell-audio' })
+      storage = await audioStorage({ objectPrefix })
 
     if(transcriptionPromise.resolve)
       throw new Error('cannot transcribe more than 1 audio at a time')
@@ -701,7 +711,6 @@ module.exports = async function audioStorage(options={}) {
       currentSegment.data.push(data)
   }
 
-  // https://github.com/voiceco/Boswell.ai/issues/276
   localforage.setDriver(localforage.INDEXEDDB)
   await localforage.ready()
 
@@ -843,6 +852,7 @@ initial state: IDLE
 └----┘     └-------┘
 */
 module.exports = function syncManager(options={}) {
+  const { objectPrefix } = options
   const uid = uuid()  // unique id of the sync manager
 
   const fsm = fsmFactory()
@@ -885,7 +895,7 @@ module.exports = function syncManager(options={}) {
 
   fsm.addState('SYNCING', {
     enter: function() {
-      syncer.postMessage({ topic: 'init', apiHost })
+      syncer.postMessage({ topic: 'init', apiHost, objectPrefix })
     },
     exit: function() {
       sessionStorage.removeItem('sync-owner')
@@ -920,7 +930,7 @@ module.exports = function(self) {
 
       const recording = await s.getRecording(audioId)
       const request = new XMLHttpRequest()
-      request.open('PUT', apiHost + '/audio/' + audioId + '?encoding=mp3&meta='+JSON.stringify(recording.meta.custom), true)
+      request.open('PUT', apiHost + '/audio/' + audioId + '?encoding=mp3&meta='+JSON.stringify(recording.meta), true)
 
       let progress = 0
       request.upload.onprogress = function(e) {
@@ -935,6 +945,7 @@ module.exports = function(self) {
       request.onload = async function() {
         const resp = this.response
         if (this.status >= 200 && this.status < 400) {
+          // TODO: read duration, other meta data out of response object
           await s.markUploaded(audioId)
           resolve(resp)
         } else {
@@ -985,9 +996,9 @@ module.exports = function(self) {
     }
   }
 
-  const init = async function(apiHost) {
+  const init = async function(apiHost, objectPrefix) {
     if(!s)
-      s = await storage({ objectPrefix: 'boswell-audio' })
+      s = await storage({ objectPrefix })
 
     // pick a random story which is finalized but not uploaded
     const id = await chooseRandomId()
@@ -1004,7 +1015,7 @@ module.exports = function(self) {
   console.log('setting up sync-worker')
   self.addEventListener('message', function(e) {
     if(e.data.topic === 'init')
-      init(e.data.apiHost)
+      init(e.data.apiHost, e.data.objectPrefix)
   })
 }
 

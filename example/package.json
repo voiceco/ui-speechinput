@@ -4,7 +4,7 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "deploy": "now && now alias $(pbpaste) speechui.boswell.ai",
+    "deploy": "now && now alias $(pbpaste) speechui.voiceco.ai",
     "start": "node index.js",
     "start-dev": "npm run watch & node index.js --https",
     "watch": "watchify client.js -v -o public/js/bundle.js --verbose"

@@ -9,7 +9,10 @@ uses watson for speech-to-text transcription
 ```javascript
 const speechinput = require('ui-speechinput')
 
-const s = speechinput()
+const s = speechinput({
+  key: 'myapi',
+  secret: '*************' // replace with your secret key
+})
 
 document.body.appendChild(s.dom)
 

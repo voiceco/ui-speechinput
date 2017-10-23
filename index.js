@@ -44,9 +44,18 @@ function appendItem() {
 }
 
 module.exports = function speechInput(options={}) {
-  const watsonTokenURL = options.tokenURL || '/token'
+  const { key, secret, tokenURL } = options
 
-  const sync = syncManager()
+  if(!key)
+    throw new Error('you must specify an api key')
+
+  if(!secret)
+    throw new Error('you must specify an api secret')
+
+  const watsonTokenURL = tokenURL || '/token'
+  const objectPrefix = 'voiceco-' + key
+  console.log('prefix:', objectPrefix)
+  const sync = syncManager({ objectPrefix })
 
   const fsm = fsmFactory()
 
@@ -274,9 +283,10 @@ module.exports = function speechInput(options={}) {
       fsm.setState('idle')
   })
 
+  // TODO: return result object which includes transcribed text, audioId, and meta data
   const transcribe = async function(userMeta={}) {
     if(!storage)
-      storage = await audioStorage({ objectPrefix: 'boswell-audio' })
+      storage = await audioStorage({ objectPrefix })
 
     if(transcriptionPromise.resolve)
       throw new Error('cannot transcribe more than 1 audio at a time')
