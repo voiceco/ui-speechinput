@@ -11,8 +11,8 @@ document.body.appendChild(s.dom)
 document.querySelector('button').addEventListener('click', async function(ev) {
   output.innerText = ''
   this.setAttribute('disabled', true)
-  const text = await s.transcribe({ fun: true, color: 'red', favs: [ '1', 'two', true ] })
-  output.innerText = 'You said:  ' + text
+  const result = await s.transcribe({ fun: true, color: 'red', favs: [ '1', 'two', true ] })
+  output.innerText = 'You said: "' + result.text + '"  audioId: ' + result.uuid
   this.removeAttribute('disabled')
 })
 
@@ -259,9 +259,7 @@ module.exports = function speechInput(options={}) {
 
   const watsonTokenURL = tokenURL || '/token'
   const objectPrefix = 'voiceco-' + key
-  console.log('prefix:', objectPrefix)
   const sync = syncManager({ objectPrefix })
-
   const fsm = fsmFactory()
 
   const dom = document.createElement('div')
@@ -501,7 +499,7 @@ module.exports = function speechInput(options={}) {
     fsm.setState('idle')
     dom.style.opacity = 1
 
-    const transcription = await new Promise(function(res, rej) {
+    const text = await new Promise(function(res, rej) {
       transcriptionPromise.resolve = res
       transcriptionPromise.rej = rej
     })
@@ -510,7 +508,7 @@ module.exports = function speechInput(options={}) {
     dom.style.opacity = 0
     transcriptionPromise.resolve = undefined
     transcriptionPromise.rej = undefined
-    return transcription
+    return { uuid, text: text.trim() }
   }
 
   return Object.freeze({ dom, transcribe })
@@ -664,6 +662,9 @@ module.exports = async function audioStorage(options={}) {
   const finalizeRecording = async function() {
     if(!currentRecording)
       return
+
+    // TODO: approximate duration from byte length
+    // (will be updated to more accurate duration once sync'd to backend)
 
     currentRecording.meta.finalized = true
     await localforage.setItem(`${objectPrefix}-${currentRecording.uuid}`, currentRecording)
@@ -907,6 +908,7 @@ module.exports = function syncManager(options={}) {
   syncer.addEventListener('message', function (ev) {
     // fired when the worker has finished uploading a file to the backend, or there was an error
     if(ev.data.cmd === 'done') {
+      console.log('got result from save:', ev.data.response)
       fsm.setState('IDLE')
     } else if(ev.data.cmd === 'ping') {
       sessionStorage.setItem('sync-last-ping', Date.now())
@@ -1003,10 +1005,14 @@ module.exports = function(self) {
     // pick a random story which is finalized but not uploaded
     const id = await chooseRandomId()
 
+    if(!id)
+      return
+
     try {
-      if(id)
-        await upload(id, apiHost)
-      self.postMessage({ cmd: 'done' })
+      let response = await upload(id, apiHost)
+      response = JSON.parse(response)
+      // TODO: update duration value in audio storage
+      self.postMessage({ cmd: 'done', response })
     } catch(er) {
       self.postMessage({ cmd: 'done', er })
     }

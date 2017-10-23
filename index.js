@@ -54,9 +54,7 @@ module.exports = function speechInput(options={}) {
 
   const watsonTokenURL = tokenURL || '/token'
   const objectPrefix = 'voiceco-' + key
-  console.log('prefix:', objectPrefix)
   const sync = syncManager({ objectPrefix })
-
   const fsm = fsmFactory()
 
   const dom = document.createElement('div')
@@ -296,7 +294,7 @@ module.exports = function speechInput(options={}) {
     fsm.setState('idle')
     dom.style.opacity = 1
 
-    const transcription = await new Promise(function(res, rej) {
+    const text = await new Promise(function(res, rej) {
       transcriptionPromise.resolve = res
       transcriptionPromise.rej = rej
     })
@@ -305,7 +303,7 @@ module.exports = function speechInput(options={}) {
     dom.style.opacity = 0
     transcriptionPromise.resolve = undefined
     transcriptionPromise.rej = undefined
-    return transcription
+    return { uuid, text: text.trim() }
   }
 
   return Object.freeze({ dom, transcribe })

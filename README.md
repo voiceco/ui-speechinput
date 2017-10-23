@@ -16,7 +16,7 @@ const s = speechinput({
 
 document.body.appendChild(s.dom)
 
-const userText = await s.transcribe() // transcription === transcribed final text that the user spoke.
+const transcription = await s.transcribe() // transcription.text === transcribed final text that the user spoke.
 ```
 
 You may also provide an object containing any meta data you wish to store with the audio object:
@@ -27,5 +27,5 @@ const meta = {
   color: 'green',
   favorited: true
 }
-const userText = await s.transcribe(meta)
+const transcription = await s.transcribe(meta)
 ```

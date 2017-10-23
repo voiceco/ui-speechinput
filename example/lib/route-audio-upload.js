@@ -36,7 +36,6 @@ module.exports = function audioUpload(req, res) {
   console.log('meta:', meta)
 
   const tmpFile = path.join(os.tmpdir(), audioId + '.' + encoding)
-  console.log('tmpFile:', tmpFile)
   const out = fs.createWriteStream(tmpFile, { encoding: 'utf8' })
   req.pipe(out)
 
@@ -65,8 +64,8 @@ module.exports = function audioUpload(req, res) {
     mp3Duration(tmpFile, function (err, duration) {
       if(err)
         return res.status(500).send(err)
-      console.log('audio duration: ', duration) // e.g. 9.561 (in seconds)
-      res.send('OK')
+      meta.duration = duration
+      res.json({ audioId, meta, encoding })
     })
   })
 }
