@@ -1003,7 +1003,7 @@ module.exports = function(self) {
   const upload = async function (audioId) {
     return new Promise(async function(resolve, reject) {
       const request = new XMLHttpRequest()
-      request.open('POST', 'https://localhost:3001/audio?audioId='+audioId+'&encoding=mp3', true)
+      request.open('PUT', 'https://localhost:3001/audio/'+audioId+'?encoding=mp3', true)
 
       let progress = 0
       request.upload.onprogress = function(e) {
@@ -1063,7 +1063,6 @@ module.exports = function(self) {
     if(!s)
       s = await storage({ objectPrefix: 'boswell-audio' })
 
-    console.log('attempting sync')
     // pick a random story which is finalized but not uploaded
     const id = await chooseRandomId()
 

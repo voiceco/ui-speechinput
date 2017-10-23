@@ -18,7 +18,7 @@ const UUID_VERSION = 4
 
 module.exports = function audioUpload(req, res) {
   // TODO: support custom metadata
-  const audioId = req.query.audioId
+  const audioId = req.params.audioId
   const encoding = req.query.encoding
 
   if(encoding !== 'mp3')
