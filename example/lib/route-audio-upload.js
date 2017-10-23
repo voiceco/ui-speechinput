@@ -17,15 +17,23 @@ const UUID_VERSION = 4
 //   https://marcelog.github.io/articles/static_sox_transcoding_lambda_mp3.html
 
 module.exports = function audioUpload(req, res) {
-  // TODO: support custom metadata
   const audioId = req.params.audioId
   const encoding = req.query.encoding
+  let meta = req.query.meta
 
   if(encoding !== 'mp3')
     return res.status(400).send('encoding must be mp3')
 
   if(!validator.isUUID(audioId, UUID_VERSION))
     return res.status(400).send('invalid audioID')
+
+  try {
+    meta = JSON.parse(meta)
+    // TODO: validate metadata
+  } catch(er) {
+    return res.status(400).send('invalid metadata object')
+  }
+  console.log('meta:', meta)
 
   const tmpFile = path.join(os.tmpdir(), audioId + '.' + encoding)
   console.log('tmpFile:', tmpFile)

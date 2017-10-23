@@ -1,15 +1,16 @@
 'use strict'
 
 const speech = require('../index')
-const uuidV4 = require('uuid/v4')
 
+
+const output = document.getElementById('output')
 const s = speech()
 document.body.appendChild(s.dom)
 
 document.querySelector('button').addEventListener('click', async function(ev) {
+  output.innerText = ''
   this.setAttribute('disabled', true)
-  const uuid = uuidV4()
-  const text = await s.transcribe(uuid)
-  alert('you said:' + text)
+  const text = await s.transcribe({ fun: true, color: 'red', favs: [ '1', 'two', true ] })
+  output.innerText = 'You said:  ' + text
   this.removeAttribute('disabled')
 })

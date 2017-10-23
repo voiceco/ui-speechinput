@@ -2,20 +2,21 @@
 'use strict'
 
 const speech = require('../index')
-const uuidV4 = require('uuid/v4')
 
+
+const output = document.getElementById('output')
 const s = speech()
 document.body.appendChild(s.dom)
 
 document.querySelector('button').addEventListener('click', async function(ev) {
+  output.innerText = ''
   this.setAttribute('disabled', true)
-  const uuid = uuidV4()
-  const text = await s.transcribe(uuid)
-  alert('you said:' + text)
+  const text = await s.transcribe({ fun: true, color: 'red', favs: [ '1', 'two', true ] })
+  output.innerText = 'You said:  ' + text
   this.removeAttribute('disabled')
 })
 
-},{"../index":6,"uuid/v4":5}],2:[function(require,module,exports){
+},{"../index":3}],2:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -202,99 +203,6 @@ process.chdir = function (dir) {
 process.umask = function() { return 0; };
 
 },{}],3:[function(require,module,exports){
-/**
- * Convert array of 16 byte values to UUID string format of the form:
- * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
- */
-var byteToHex = [];
-for (var i = 0; i < 256; ++i) {
-  byteToHex[i] = (i + 0x100).toString(16).substr(1);
-}
-
-function bytesToUuid(buf, offset) {
-  var i = offset || 0;
-  var bth = byteToHex;
-  return bth[buf[i++]] + bth[buf[i++]] +
-          bth[buf[i++]] + bth[buf[i++]] + '-' +
-          bth[buf[i++]] + bth[buf[i++]] + '-' +
-          bth[buf[i++]] + bth[buf[i++]] + '-' +
-          bth[buf[i++]] + bth[buf[i++]] + '-' +
-          bth[buf[i++]] + bth[buf[i++]] +
-          bth[buf[i++]] + bth[buf[i++]] +
-          bth[buf[i++]] + bth[buf[i++]];
-}
-
-module.exports = bytesToUuid;
-
-},{}],4:[function(require,module,exports){
-(function (global){
-// Unique ID creation requires a high quality random # generator.  In the
-// browser this is a little complicated due to unknown quality of Math.random()
-// and inconsistent support for the `crypto` API.  We do the best we can via
-// feature-detection
-var rng;
-
-var crypto = global.crypto || global.msCrypto; // for IE 11
-if (crypto && crypto.getRandomValues) {
-  // WHATWG crypto RNG - http://wiki.whatwg.org/wiki/Crypto
-  var rnds8 = new Uint8Array(16); // eslint-disable-line no-undef
-  rng = function whatwgRNG() {
-    crypto.getRandomValues(rnds8);
-    return rnds8;
-  };
-}
-
-if (!rng) {
-  // Math.random()-based (RNG)
-  //
-  // If all else fails, use Math.random().  It's fast, but is of unspecified
-  // quality.
-  var rnds = new Array(16);
-  rng = function() {
-    for (var i = 0, r; i < 16; i++) {
-      if ((i & 0x03) === 0) r = Math.random() * 0x100000000;
-      rnds[i] = r >>> ((i & 0x03) << 3) & 0xff;
-    }
-
-    return rnds;
-  };
-}
-
-module.exports = rng;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],5:[function(require,module,exports){
-var rng = require('./lib/rng');
-var bytesToUuid = require('./lib/bytesToUuid');
-
-function v4(options, buf, offset) {
-  var i = buf && offset || 0;
-
-  if (typeof(options) == 'string') {
-    buf = options == 'binary' ? new Array(16) : null;
-    options = null;
-  }
-  options = options || {};
-
-  var rnds = options.random || (options.rng || rng)();
-
-  // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
-  rnds[6] = (rnds[6] & 0x0f) | 0x40;
-  rnds[8] = (rnds[8] & 0x3f) | 0x80;
-
-  // Copy bytes to buffer, if provided
-  if (buf) {
-    for (var ii = 0; ii < 16; ++ii) {
-      buf[i + ii] = rnds[ii];
-    }
-  }
-
-  return buf || bytesToUuid(rnds);
-}
-
-module.exports = v4;
-
-},{"./lib/bytesToUuid":3,"./lib/rng":4}],6:[function(require,module,exports){
 'use strict'
 
 const audioStorage = require('./lib/storage-audio')
@@ -571,14 +479,15 @@ module.exports = function speechInput(options={}) {
       fsm.setState('idle')
   })
 
-  const transcribe = async function(uuid=uuidV4()) {
+  const transcribe = async function(userMeta={}) {
     if(!storage)
       storage = await audioStorage({ objectPrefix: 'boswell-audio' })
 
     if(transcriptionPromise.resolve)
       throw new Error('cannot transcribe more than 1 audio at a time')
 
-    storage.createRecording(uuid)
+    const uuid = uuidV4()
+    storage.createRecording(uuid, userMeta)
     fsm.setState('idle')
     dom.style.opacity = 1
 
@@ -597,7 +506,7 @@ module.exports = function speechInput(options={}) {
   return Object.freeze({ dom, transcribe })
 }
 
-},{"./lib/finite-state-machine":7,"./lib/press":8,"./lib/storage-audio":9,"./lib/stream-microphone":10,"./lib/sync-manager":11,"./lib/ui-recordinglabel":13,"./lib/watson-get-token":14,"./lib/watson-stt":16,"./lib/watson-stt-result-stream":15,"./lib/webaudio-mp3-stream":18,"uuid/v4":30}],7:[function(require,module,exports){
+},{"./lib/finite-state-machine":4,"./lib/press":5,"./lib/storage-audio":6,"./lib/stream-microphone":7,"./lib/sync-manager":8,"./lib/ui-recordinglabel":10,"./lib/watson-get-token":11,"./lib/watson-stt":13,"./lib/watson-stt-result-stream":12,"./lib/webaudio-mp3-stream":15,"uuid/v4":27}],4:[function(require,module,exports){
 'use strict'
 
 module.exports = function fsm() {
@@ -634,7 +543,7 @@ module.exports = function fsm() {
   return Object.freeze({ addState, getCurrentState, setState })
 }
 
-},{}],8:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 'use strict'
 
 const isTouch = require('is-touch')
@@ -681,7 +590,7 @@ module.exports = {
   }
 }
 
-},{"is-touch":22}],9:[function(require,module,exports){
+},{"is-touch":19}],6:[function(require,module,exports){
 'use strict'
 
 const localforage = require('localforage')
@@ -701,7 +610,9 @@ module.exports = async function audioStorage(options={}) {
 
   let currentRecording, currentSegment
 
-  const createRecording = async function(uuid) {
+  // @param uuid  v4 uuid of recording
+  // @param meta  optional object containing custom metadata
+  const createRecording = async function(uuid, meta={}) {
     currentRecording = await getRecording(uuid)
 
     if(currentRecording)
@@ -713,7 +624,8 @@ module.exports = async function audioStorage(options={}) {
         created: Date.now(),
         finalized: false,
         syncedToServer: false,
-        type: 'audio/mp3'
+        type: 'audio/mp3',
+        custom: meta
       },
       segments: [ ]
     }
@@ -803,7 +715,7 @@ module.exports = async function audioStorage(options={}) {
     unsubscribe, write, pipe, unpipe })
 }
 
-},{"ev-pubsub":19,"localforage":23}],10:[function(require,module,exports){
+},{"ev-pubsub":16,"localforage":20}],7:[function(require,module,exports){
 'use strict'
 
 const getUserMedia = require('get-user-media-promise')
@@ -913,7 +825,7 @@ module.exports = function microphoneStream() {
   return Object.freeze({ pipe, unpipe, start, stop, sampleRate: audioContext.sampleRate })
 }
 
-},{"ev-pubsub":19,"get-user-media-promise":20}],11:[function(require,module,exports){
+},{"ev-pubsub":16,"get-user-media-promise":17}],8:[function(require,module,exports){
 'use strict'
 
 const fsmFactory = require('../finite-state-machine')
@@ -994,7 +906,7 @@ module.exports = function syncManager(options={}) {
   fsm.setState('IDLE')
 }
 
-},{"../finite-state-machine":7,"./sync-worker":12,"lockable-storage":24,"webworkify":31}],12:[function(require,module,exports){
+},{"../finite-state-machine":4,"./sync-worker":9,"lockable-storage":21,"webworkify":28}],9:[function(require,module,exports){
 'use strict'
 
 const storage = require('../storage-audio')
@@ -1005,8 +917,10 @@ module.exports = function(self) {
 
   const upload = async function (audioId, apiHost) {
     return new Promise(async function(resolve, reject) {
+
+      const recording = await s.getRecording(audioId)
       const request = new XMLHttpRequest()
-      request.open('PUT', apiHost + '/audio/' + audioId + '?encoding=mp3', true)
+      request.open('PUT', apiHost + '/audio/' + audioId + '?encoding=mp3&meta='+JSON.stringify(recording.meta.custom), true)
 
       let progress = 0
       request.upload.onprogress = function(e) {
@@ -1035,7 +949,6 @@ module.exports = function(self) {
         reject()
       }
 
-      const recording = await s.getRecording(audioId)
       const parts = []
       recording.segments.forEach(function(s) {
         s.data.forEach(function(s2) {
@@ -1095,7 +1008,7 @@ module.exports = function(self) {
   })
 }
 
-},{"../storage-audio":9}],13:[function(require,module,exports){
+},{"../storage-audio":6}],10:[function(require,module,exports){
 'use strict'
 
 module.exports = function recordingLabel(dom) {
@@ -1151,7 +1064,7 @@ module.exports = function recordingLabel(dom) {
   return Object.freeze({ dom, show, hide })
 }
 
-},{}],14:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 'use strict'
 
 const FIFTY_MINUTES_IN_MILLISECONDS = 50 * 60 * 1000
@@ -1180,7 +1093,7 @@ module.exports = async function getToken(url='/token') {
   return token
 }
 
-},{}],15:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 'use strict'
 
 const pubsub = require('ev-pubsub')
@@ -1254,7 +1167,7 @@ module.exports = function watsonSTTResultStream(options={}) {
   return Object.freeze({ clear, subscribe, unsubscribe, write, pipe, unpipe, markBoundary })
 }
 
-},{"ev-pubsub":19}],16:[function(require,module,exports){
+},{"ev-pubsub":16}],13:[function(require,module,exports){
 'use strict'
 
 const fsmFactory = require('./finite-state-machine')
@@ -1507,7 +1420,7 @@ module.exports = function watsonSpeechToText(options={}) {
   return Object.freeze({ close, pipe, recognizeStart, recognizeStop, unpipe, subscribe, unsubscribe, write })
 }
 
-},{"./finite-state-machine":7,"ev-pubsub":19,"lodash.pick":25}],17:[function(require,module,exports){
+},{"./finite-state-machine":4,"ev-pubsub":16,"lodash.pick":22}],14:[function(require,module,exports){
 'use strict'
 
 //const lamejs = require('lamejs')
@@ -1579,7 +1492,7 @@ module.exports = function(self) {
   })
 }
 
-},{}],18:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 'use strict'
 
 const pubsub  = require('ev-pubsub')
@@ -1627,7 +1540,7 @@ module.exports = function webAudioMp3Stream(options={}) {
   return Object.freeze({ pipe, unpipe, write })
 }
 
-},{"./encoder-worker":17,"ev-pubsub":19,"webworkify":31}],19:[function(require,module,exports){
+},{"./encoder-worker":14,"ev-pubsub":16,"webworkify":28}],16:[function(require,module,exports){
 'use strict'
 
 const nextTick    = require('next-tick-2')
@@ -1709,7 +1622,7 @@ module.exports = function pubsub() {
   return Object.freeze({ publish, subscribe, unsubscribe, once })
 }
 
-},{"next-tick-2":26,"remove-array-items":27}],20:[function(require,module,exports){
+},{"next-tick-2":23,"remove-array-items":24}],17:[function(require,module,exports){
 // loosely based on example code at https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
 (function (root) {
   'use strict';
@@ -1820,7 +1733,7 @@ module.exports = function pubsub() {
   }
 }(this));
 
-},{}],21:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 (function (process){
 // Coding standard for this project defined @ https://github.com/MatthewSH/standards/blob/master/JavaScript.md
 'use strict';
@@ -1828,7 +1741,7 @@ module.exports = function pubsub() {
 exports = module.exports = !!(typeof process !== 'undefined' && process.versions && process.versions.node);
 
 }).call(this,require('_process'))
-},{"_process":2}],22:[function(require,module,exports){
+},{"_process":2}],19:[function(require,module,exports){
 (function (global){
 'use strict'
 var isNode = require('is-node')
@@ -1845,7 +1758,7 @@ module.exports = isNode
     false
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"is-node":21}],23:[function(require,module,exports){
+},{"is-node":18}],20:[function(require,module,exports){
 (function (global){
 /*!
     localForage -- Offline Storage, Improved
@@ -4248,7 +4161,7 @@ module.exports = localforage_js;
 },{"3":3}]},{},[4])(4)
 });
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],24:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 /**
 Copyright (c) 2012, Benjamin Dumke-von der Ehe
 
@@ -4388,7 +4301,7 @@ function lockImpl(key, callback, maxDuration, synchronous) {
     }
 }
 
-},{}],25:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 (function (global){
 /**
  * lodash (Custom Build) <https://lodash.com/>
@@ -4895,7 +4808,7 @@ var pick = baseRest(function(object, props) {
 module.exports = pick;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],26:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 'use strict'
 
 var ensureCallable = function (fn) {
@@ -4959,7 +4872,7 @@ module.exports = (function () {
 	}
 }())
 
-},{}],27:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 'use strict'
 
 /**
@@ -4989,13 +4902,100 @@ module.exports = function removeItems(arr, startIdx, removeCount)
   arr.length = len
 }
 
-},{}],28:[function(require,module,exports){
-arguments[4][3][0].apply(exports,arguments)
-},{"dup":3}],29:[function(require,module,exports){
-arguments[4][4][0].apply(exports,arguments)
-},{"dup":4}],30:[function(require,module,exports){
-arguments[4][5][0].apply(exports,arguments)
-},{"./lib/bytesToUuid":28,"./lib/rng":29,"dup":5}],31:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
+/**
+ * Convert array of 16 byte values to UUID string format of the form:
+ * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+ */
+var byteToHex = [];
+for (var i = 0; i < 256; ++i) {
+  byteToHex[i] = (i + 0x100).toString(16).substr(1);
+}
+
+function bytesToUuid(buf, offset) {
+  var i = offset || 0;
+  var bth = byteToHex;
+  return bth[buf[i++]] + bth[buf[i++]] +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] +
+          bth[buf[i++]] + bth[buf[i++]] +
+          bth[buf[i++]] + bth[buf[i++]];
+}
+
+module.exports = bytesToUuid;
+
+},{}],26:[function(require,module,exports){
+(function (global){
+// Unique ID creation requires a high quality random # generator.  In the
+// browser this is a little complicated due to unknown quality of Math.random()
+// and inconsistent support for the `crypto` API.  We do the best we can via
+// feature-detection
+var rng;
+
+var crypto = global.crypto || global.msCrypto; // for IE 11
+if (crypto && crypto.getRandomValues) {
+  // WHATWG crypto RNG - http://wiki.whatwg.org/wiki/Crypto
+  var rnds8 = new Uint8Array(16); // eslint-disable-line no-undef
+  rng = function whatwgRNG() {
+    crypto.getRandomValues(rnds8);
+    return rnds8;
+  };
+}
+
+if (!rng) {
+  // Math.random()-based (RNG)
+  //
+  // If all else fails, use Math.random().  It's fast, but is of unspecified
+  // quality.
+  var rnds = new Array(16);
+  rng = function() {
+    for (var i = 0, r; i < 16; i++) {
+      if ((i & 0x03) === 0) r = Math.random() * 0x100000000;
+      rnds[i] = r >>> ((i & 0x03) << 3) & 0xff;
+    }
+
+    return rnds;
+  };
+}
+
+module.exports = rng;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],27:[function(require,module,exports){
+var rng = require('./lib/rng');
+var bytesToUuid = require('./lib/bytesToUuid');
+
+function v4(options, buf, offset) {
+  var i = buf && offset || 0;
+
+  if (typeof(options) == 'string') {
+    buf = options == 'binary' ? new Array(16) : null;
+    options = null;
+  }
+  options = options || {};
+
+  var rnds = options.random || (options.rng || rng)();
+
+  // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
+  rnds[6] = (rnds[6] & 0x0f) | 0x40;
+  rnds[8] = (rnds[8] & 0x3f) | 0x80;
+
+  // Copy bytes to buffer, if provided
+  if (buf) {
+    for (var ii = 0; ii < 16; ++ii) {
+      buf[i + ii] = rnds[ii];
+    }
+  }
+
+  return buf || bytesToUuid(rnds);
+}
+
+module.exports = v4;
+
+},{"./lib/bytesToUuid":25,"./lib/rng":26}],28:[function(require,module,exports){
 var bundleFn = arguments[3];
 var sources = arguments[4];
 var cache = arguments[5];

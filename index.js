@@ -274,14 +274,15 @@ module.exports = function speechInput(options={}) {
       fsm.setState('idle')
   })
 
-  const transcribe = async function(uuid=uuidV4()) {
+  const transcribe = async function(userMeta={}) {
     if(!storage)
       storage = await audioStorage({ objectPrefix: 'boswell-audio' })
 
     if(transcriptionPromise.resolve)
       throw new Error('cannot transcribe more than 1 audio at a time')
 
-    storage.createRecording(uuid)
+    const uuid = uuidV4()
+    storage.createRecording(uuid, userMeta)
     fsm.setState('idle')
     dom.style.opacity = 1
 

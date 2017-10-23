@@ -13,7 +13,16 @@ const s = speechinput()
 
 document.body.appendChild(s.dom)
 
-const id = uuid() // generate a unique uuid for the audio/text we're recording
+const userText = await s.transcribe() // transcription === transcribed final text that the user spoke.
+```
 
-const userText = await s.transcribe(id) // transcription === transcribed final text that the user spoke.
+You may also provide an object containing any meta data you wish to store with the audio object:
+
+```javascript
+const meta = {
+  myid: uuid(),
+  color: 'green',
+  favorited: true
+}
+const userText = await s.transcribe(meta)
 ```
