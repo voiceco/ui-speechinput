@@ -997,17 +997,13 @@ module.exports = function syncManager(options={}) {
 const storage = require('../storage-audio')
 
 
-let t= 14
-let b=16
 module.exports = function(self) {
   let s
 
   const upload = async function (audioId) {
-    //console.log('uploading audioId:', audioId)
     return new Promise(async function(resolve, reject) {
       const request = new XMLHttpRequest()
-      console.log('opening /raw_upload ?')
-      request.open('POST', 'https://localhost:3001/raw_upload', true)
+      request.open('POST', 'https://localhost:3001/audio?audioId='+audioId+'&encoding=mp3', true)
 
       let progress = 0
       request.upload.onprogress = function(e) {
@@ -1025,10 +1021,6 @@ module.exports = function(self) {
         resolve()
       }
 
-      // sends as multipart/form-data by default, which is what we want, because
-      // application/x-www-form-urlencoded is URL encoded and wastes bandwidth
-      //const formData = new FormData()
-
       const recording = await s.getRecording(audioId)
       const parts = []
       recording.segments.forEach(function(s) {
@@ -1037,12 +1029,17 @@ module.exports = function(self) {
         })
       })
 
+      //console.log('constructed blob', audioBlob, 'type', recording.meta.type)
       const audioBlob = new Blob(parts, { type: recording.meta.type })
-      console.log('constructed blob', audioBlob, 'type', recording.meta.type)
 
+      request.send(audioBlob)
+
+      // an alternative method to send the audio blob:
+      // sends as multipart/form-data by default, which is what we want, because
+      // application/x-www-form-urlencoded is URL encoded and wastes bandwidth
+      //const formData = new FormData()
       //formData.append('rawAudio', audioBlob, audioId)
       //request.send(formData)
-      request.send(audioBlob)
     })
   }
 
@@ -1069,6 +1066,8 @@ module.exports = function(self) {
     console.log('attempting sync')
     // pick a random story which is finalized but not uploaded
     const id = await chooseRandomId()
+
+    // TODO: handle failures (exception or non-200 status code)
     if(id)
       await upload(id)
 
