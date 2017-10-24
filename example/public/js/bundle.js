@@ -860,12 +860,12 @@ module.exports = function syncManager(options={}) {
 
   function idleState() {
     let _interval
-    const waitTime = 30000
+    const waitTime = 10000
 
     const _checkIfCanRun = function() {
       lock('sync-owner-availability', function() {
-        // if sync owner is unset or there's been no sync activity for 30
-        // seconds, become the sync owner
+        // if sync owner is unset or there's been no sync activity for waitTime
+        // milliseconds, become the sync owner
         const lastSyncTime = sessionStorage.getItem('sync-last-ping') || 0
         const delta = Date.now() - lastSyncTime
         if(!sessionStorage.getItem('sync-owner') || delta > 30000) {
@@ -905,7 +905,6 @@ module.exports = function syncManager(options={}) {
   syncer.addEventListener('message', function (ev) {
     // fired when the worker has finished uploading a file to the backend, or there was an error
     if(ev.data.cmd === 'done') {
-      console.log('got result from save:', ev.data.response)
       fsm.setState('IDLE')
     } else if(ev.data.cmd === 'ping') {
       sessionStorage.setItem('sync-last-ping', Date.now())
@@ -936,8 +935,10 @@ module.exports = function(self) {
       }
 
       recording.segments.forEach(function(segment) {
-        result.segments.push(segment)
+        result.segments.push(segment.transcription)
       })
+
+      console.log('sending', result)
 
       request.open('PUT', apiHost + '/audio/' + audioId + '?encoding=mp3&meta='+JSON.stringify(result), true)
 
@@ -1013,7 +1014,7 @@ module.exports = function(self) {
     const id = await chooseRandomId()
 
     if(!id)
-      return
+      return self.postMessage({ cmd: 'done' })
 
     try {
       let response = await upload(id, apiHost)
