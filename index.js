@@ -54,7 +54,7 @@ module.exports = function speechInput(options={}) {
 
   const apiHost = 'https://audio.voiceco.ai'
   const objectPrefix = 'voiceco-' + key
-  const sync = syncManager({ objectPrefix, apiHost })
+  const sync = syncManager({ objectPrefix, apiHost, apiId: key, apiSecret: secret })
   const fsm = fsmFactory()
 
   const dom = document.createElement('div')

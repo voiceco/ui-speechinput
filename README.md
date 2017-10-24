@@ -10,8 +10,9 @@ uses watson for speech-to-text transcription
 const speechinput = require('ui-speechinput')
 
 const s = speechinput({
+  // replace with your voiceco API key and secret values
   key: 'myapi',
-  secret: '*************' // replace with your secret key
+  secret: '*************'
 })
 
 document.body.appendChild(s.dom)

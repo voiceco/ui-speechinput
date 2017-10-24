@@ -5,7 +5,12 @@ const speech = require('../index')
 
 
 const output = document.getElementById('output')
-const s = speech({ key: 'myapi', secret: 'mysuper secret key' })
+
+// voiceco api key/secret pair (test credentials)
+const key = '5daa5941-e1b6-445f-b4af-d4fb98f6bd8e'
+const secret = 'e39a7d2d-fb2f-4f70-aed9-57d7543a7d2d'
+
+const s = speech({ key, secret })
 document.body.appendChild(s.dom)
 
 document.querySelector('button').addEventListener('click', async function(ev) {
@@ -259,7 +264,7 @@ module.exports = function speechInput(options={}) {
 
   const apiHost = 'https://audio.voiceco.ai'
   const objectPrefix = 'voiceco-' + key
-  const sync = syncManager({ objectPrefix, apiHost })
+  const sync = syncManager({ objectPrefix, apiHost, apiId: key, apiSecret: secret })
   const fsm = fsmFactory()
 
   const dom = document.createElement('div')
@@ -853,7 +858,7 @@ initial state: IDLE
 */
 
 module.exports = function syncManager(options={}) {
-  const { objectPrefix, apiHost } = options
+  const { objectPrefix, apiHost, apiId, apiSecret } = options
   const uid = uuid()  // unique id of the sync manager
 
   const fsm = fsmFactory()
@@ -893,7 +898,7 @@ module.exports = function syncManager(options={}) {
 
   fsm.addState('SYNCING', {
     enter: function() {
-      syncer.postMessage({ topic: 'init', apiHost, objectPrefix })
+      syncer.postMessage({ topic: 'init', apiHost, objectPrefix, apiId, apiSecret })
     },
     exit: function() {
       sessionStorage.removeItem('sync-owner')
@@ -923,7 +928,7 @@ const storage = require('../storage-audio')
 module.exports = function(self) {
   let s
 
-  const upload = async function (audioId, apiHost) {
+  const upload = async function (audioId, apiHost, apiId, apiSecret) {
     return new Promise(async function(resolve, reject) {
 
       const recording = await s.getRecording(audioId)
@@ -940,7 +945,7 @@ module.exports = function(self) {
 
       console.log('sending', result)
 
-      request.open('PUT', apiHost + '/audio/' + audioId + '?encoding=mp3&meta='+JSON.stringify(result), true)
+      request.open('PUT', apiHost + '/audio/' + audioId + '?encoding=mp3&apiId=' + apiId + '&apiSecret=' + apiSecret + '&meta='+JSON.stringify(result), true)
 
       let progress = 0
       request.upload.onprogress = function(e) {
@@ -1006,7 +1011,8 @@ module.exports = function(self) {
     }
   }
 
-  const init = async function(apiHost, objectPrefix) {
+  const init = async function(options) {
+    const { apiHost, objectPrefix, apiId, apiSecret } = options
     if(!s)
       s = await storage({ objectPrefix })
 
@@ -1017,7 +1023,7 @@ module.exports = function(self) {
       return self.postMessage({ cmd: 'done' })
 
     try {
-      let response = await upload(id, apiHost)
+      let response = await upload(id, apiHost, apiId, apiSecret)
       response = JSON.parse(response)
       // TODO: update duration value in audio storage
       self.postMessage({ cmd: 'done', response })
@@ -1029,7 +1035,7 @@ module.exports = function(self) {
   console.log('setting up sync-worker')
   self.addEventListener('message', function(e) {
     if(e.data.topic === 'init')
-      init(e.data.apiHost, e.data.objectPrefix)
+      init(e.data)
   })
 }
 
