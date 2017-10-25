@@ -4,8 +4,8 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "start": "serve public/",
-    "start-dev": "npm run watch & serve --ssl public/",
+    "start": "serve --ssl public/",
+    "start-dev": "npm run watch & npm start",
     "watch": "watchify client.js -v -o public/js/bundle.js --verbose"
   },
   "author": "",

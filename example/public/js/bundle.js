@@ -943,8 +943,6 @@ module.exports = function(self) {
         result.segments.push(segment.transcription)
       })
 
-      console.log('sending', result)
-
       request.open('PUT', apiHost + '/audio/' + audioId + '?encoding=mp3&apiId=' + apiId + '&apiSecret=' + apiSecret + '&meta='+JSON.stringify(result), true)
 
       let progress = 0
