@@ -14,8 +14,7 @@ const watsonSTT    = require('./lib/watson-stt')
 
 
 /*
-finite state machine for speechinput widget
-initial state: IDLE
+finite state machine for speechinput widget. initial state: IDLE
 
           ┌----┐
 ┌---┬---> |IDLE├-------┐
@@ -281,7 +280,13 @@ module.exports = function speechInput(options={}) {
       fsm.setState('idle')
   })
 
-  const pauseTranscription = function() {
+  const cancel = function() {
+    pause()
+    transcriptionPromise.resolve = undefined
+    transcriptionPromise.rej = undefined
+  }
+
+  const pause = function() {
     fsm.setState('paused')
   }
 
@@ -309,5 +314,5 @@ module.exports = function speechInput(options={}) {
     return { uuid, text: text.trim() }
   }
 
-  return Object.freeze({ dom, transcribe, pauseTranscription })
+  return Object.freeze({ dom, transcribe, pause, cancel })
 }
