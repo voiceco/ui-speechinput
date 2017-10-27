@@ -282,6 +282,7 @@ module.exports = function speechInput(options={}) {
 
   const cancel = function() {
     pause()
+    dom.style.opacity = 0
     transcriptionPromise.resolve = undefined
     transcriptionPromise.rej = undefined
   }
