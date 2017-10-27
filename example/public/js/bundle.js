@@ -491,6 +491,10 @@ module.exports = function speechInput(options={}) {
       fsm.setState('idle')
   })
 
+  const pauseTranscription = function() {
+    fsm.setState('paused')
+  }
+
   const transcribe = async function(userMeta={}) {
     if(!storage)
       storage = await audioStorage({ objectPrefix })
@@ -515,13 +519,14 @@ module.exports = function speechInput(options={}) {
     return { uuid, text: text.trim() }
   }
 
-  return Object.freeze({ dom, transcribe })
+  return Object.freeze({ dom, transcribe, pauseTranscription })
 }
 
 },{"./lib/finite-state-machine":4,"./lib/press":5,"./lib/storage-audio":6,"./lib/stream-microphone":7,"./lib/sync-manager":8,"./lib/ui-recordinglabel":10,"./lib/watson-get-token":11,"./lib/watson-stt":13,"./lib/watson-stt-result-stream":12,"./lib/webaudio-mp3-stream":15,"uuid/v4":27}],4:[function(require,module,exports){
 'use strict'
 
-module.exports = function fsm() {
+module.exports = function fsm(options={}) {
+  const { verbose } = options
   const states = {}
   let currentState
 
@@ -541,12 +546,14 @@ module.exports = function fsm() {
       return // new state doesn't exist
 
     if (currentState) {
-      console.log('exiting state', currentState)
+      if (verbose)
+        console.log(verbose, 'exiting state', currentState)
       if(states[currentState].exit)
         await states[currentState].exit()
     }
 
-    console.log('entering state', stateName)
+    if (verbose)
+      console.log(verbose, 'entering state', stateName)
     currentState = stateName
     if(states[currentState].enter)
       await states[currentState].enter(...args)
@@ -844,7 +851,6 @@ module.exports = function microphoneStream() {
 
 const fsmFactory = require('../finite-state-machine')
 const lock       = require('lockable-storage').lock
-const uuid       = require('lockable-storage').uniqueId
 const workify    = require('webworkify')
 
 
@@ -857,36 +863,50 @@ initial state: IDLE
 └----┘     └-------┘
 */
 
-module.exports = function syncManager(options={}) {
+function uuid() {
+  return '' + Math.floor(Number.MAX_SAFE_INTEGER * Math.random())
+}
+
+module.exports = function syncManager (options={}) {
   const { objectPrefix, apiHost, apiId, apiSecret } = options
   const uid = uuid()  // unique id of the sync manager
 
-  const fsm = fsmFactory()
+  const fsm = fsmFactory({ verbose: true})
 
-  function idleState() {
+  function idleState () {
     let _interval
-    const waitTime = 10000
+    const WAIT_TIME      = 10000 // milliseconds
+    const WORKER_TIMEOUT = 30000 // milliseconds
 
-    const _checkIfCanRun = function() {
+    const _startSync = function() {
+      console.log('sync-manager', uid, 'is running sync')
+      sessionStorage.setItem('sync-owner', uid)
+      sessionStorage.setItem('sync-last-ping', Date.now())
+      fsm.setState('SYNCING')
+    }
+
+    const _checkIfCanRun = function () {
       lock('sync-owner-availability', function() {
-        // if sync owner is unset or there's been no sync activity for waitTime
+        // if sync owner is unset or there's been no sync activity for WORKER_TIMEOUT
         // milliseconds, become the sync owner
         const lastSyncTime = sessionStorage.getItem('sync-last-ping') || 0
         const delta = Date.now() - lastSyncTime
-        if(!sessionStorage.getItem('sync-owner') || delta > 30000) {
-          sessionStorage.setItem('sync-owner', uid)
-          fsm.setState('SYNCING')
-        } else {
-          _interval = setTimeout(_checkIfCanRun, waitTime)
-        }
+
+        //console.log('owner', sessionStorage.getItem('sync-owner'), 'delta', delta)
+        if (!sessionStorage.getItem('sync-owner') || delta > WORKER_TIMEOUT)
+          _startSync()
+        else if (sessionStorage.getItem('sync-owner') === uid && delta <= WORKER_TIMEOUT)
+          _startSync()
+        else
+          _interval = setTimeout(_checkIfCanRun, WAIT_TIME)
       })
     }
 
-    const enter = function() {
-      _interval = setTimeout(_checkIfCanRun, waitTime)
+    const enter = function () {
+      _interval = setTimeout(_checkIfCanRun, WAIT_TIME)
     }
 
-    const exit = function() {
+    const exit = function () {
       clearInterval(_interval)
       _interval = undefined
     }
@@ -899,21 +919,18 @@ module.exports = function syncManager(options={}) {
   fsm.addState('SYNCING', {
     enter: function() {
       syncer.postMessage({ topic: 'init', apiHost, objectPrefix, apiId, apiSecret })
-    },
-    exit: function() {
-      sessionStorage.removeItem('sync-owner')
     }
   })
 
   const syncer = workify(require('./sync-worker'))
 
   syncer.addEventListener('message', function (ev) {
+    // received a message from the worker backend so update the ping timestamp
+    sessionStorage.setItem('sync-last-ping', Date.now())
+
     // fired when the worker has finished uploading a file to the backend, or there was an error
-    if(ev.data.cmd === 'done') {
+    if(ev.data.cmd === 'done')
       fsm.setState('IDLE')
-    } else if(ev.data.cmd === 'ping') {
-      sessionStorage.setItem('sync-last-ping', Date.now())
-    }
   })
 
   fsm.setState('IDLE')
