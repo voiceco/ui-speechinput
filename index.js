@@ -238,9 +238,12 @@ module.exports = function speechInput(options={}) {
         fsm.setState('finalizing')
       }
 
+      // the done button is disabled while there's no transcription output
+      const disableDoneButton = select('#transcription-output').innerText.trim().length === 0
+
       setButtonDisabledStates({
         'button.re-record': false,
-        'button.done': false,
+        'button.done': disableDoneButton,
         'button.record': false
       })
 
