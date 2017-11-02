@@ -72,6 +72,21 @@ module.exports = function speechInput(options={}) {
 
   const recordLabel = recLabel(dom.querySelector('.record-container'))
 
+  let mic, mp3Encoder, storage
+
+  const transcriptionPromise = {
+    resolve: undefined,
+    reject: undefined
+  }
+  const speech = watsonSTT({ interim_results: true, smart_formatting: true })
+
+  const recordButton = dom.querySelector('button.record')
+  press.once(recordButton, function(ev) {
+    mic = micStream()
+    mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
+  })
+
+
   fsm.addState('idle', {
     enter: function(er) {
       if (er)
@@ -106,19 +121,6 @@ module.exports = function speechInput(options={}) {
         select(selector).removeAttribute('disabled')
     })
   }
-
-  let mic, mp3Encoder, storage
-  const transcriptionPromise = {
-    resolve: undefined,
-    reject: undefined
-  }
-  const speech = watsonSTT({ interim_results: true, smart_formatting: true })
-
-  const recordButton = dom.querySelector('button.record')
-  press.once(recordButton, function(ev) {
-    mic = micStream()
-    mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
-  })
 
   fsm.addState('offline', {
     enter: function() {
@@ -295,6 +297,13 @@ module.exports = function speechInput(options={}) {
     fsm.setState('paused')
   }
 
+  const getAllRecordings = async function() {
+    if(!storage)
+      storage = await audioStorage({ objectPrefix })
+
+    return storage.getAllRecordings()
+  }
+
   const removeRecording = async function(uuid) {
     if(!storage)
       storage = await audioStorage({ objectPrefix })
@@ -326,5 +335,5 @@ module.exports = function speechInput(options={}) {
     return { uuid, text: text.trim() }
   }
 
-  return Object.freeze({ cancel, dom, pause, removeRecording, transcribe })
+  return Object.freeze({ cancel, dom, pause, getAllRecordings, removeRecording, transcribe })
 }
