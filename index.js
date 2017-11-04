@@ -144,6 +144,7 @@ module.exports = function speechInput(options={}) {
         'button.record': true,
       })
 
+      recordLabel.show('initializing', '#54dd9d')
       try {
         const token = await getToken(apiHost + '/token')
         speech.recognizeStart(token)
