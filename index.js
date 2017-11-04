@@ -68,7 +68,8 @@ module.exports = function speechInput(options={}) {
   <button class="record" disabled>record</button>
   <button class="re-record" disabled>re-record</button>
   <button class="done" disabled>done</button>
-</div>`
+</div>
+<span class="record-error" style="padding-left: 138px"></span>`
 
   const recordLabel = recLabel(dom.querySelector('.record-container'))
 
@@ -90,7 +91,7 @@ module.exports = function speechInput(options={}) {
   fsm.addState('idle', {
     enter: function(er) {
       if (er)
-        console.error('TODO: display a UI error for:', er)
+        dom.querySelector('.record-error').innerText = er
 
       select('#transcription-output').innerText = ''
       const button = select('button.record')
@@ -105,6 +106,9 @@ module.exports = function speechInput(options={}) {
         'button.done': true,
         'button.record': false
       })
+    },
+    exit: function() {
+      dom.querySelector('.record-error').innerText = ''
     }
   })
 
