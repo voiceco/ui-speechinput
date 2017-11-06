@@ -62,7 +62,7 @@ module.exports = function speechInput(options={}) {
   dom.style.touchAction = 'manipulation'
   dom.style.opacity = 0 // hidden by default
   dom.classList.add('ui-speechinput')
-  dom.innerHTML = `<div id="transcription-output"></div>
+  dom.innerHTML = `<div class="transcription-output"></div>
 <div class="control-bar" style="display: flex; flex-direction: row">
   <div class="record-container recording"></div>
   <button class="record" disabled>record</button>
@@ -93,7 +93,7 @@ module.exports = function speechInput(options={}) {
       if (er)
         dom.querySelector('.record-error').innerText = er
 
-      select('#transcription-output').innerText = ''
+      select('.transcription-output').innerText = ''
       const button = select('button.record')
       button.innerText = 'record'
       button.onclick = function(ev) {
@@ -168,7 +168,7 @@ module.exports = function speechInput(options={}) {
       document.addEventListener('visibilitychange', _visibilityChanged)
 
       currentItem = appendItem()
-      select('#transcription-output').appendChild(currentItem)
+      select('.transcription-output').appendChild(currentItem)
 
       recordButton.innerText = 'pause'
 
@@ -246,8 +246,8 @@ module.exports = function speechInput(options={}) {
       }
 
       // disable done and re-record buttons when there's no transcription output
-      const disableDone = select('#transcription-output').innerText.trim().length === 0
-      const disableReRecord = select('#transcription-output').innerText.trim().length === 0
+      const disableDone = select('.transcription-output').innerText.trim().length === 0
+      const disableReRecord = select('.transcription-output').innerText.trim().length === 0
 
       setButtonDisabledStates({
         'button.re-record': disableReRecord,
@@ -266,7 +266,7 @@ module.exports = function speechInput(options={}) {
         'button.done': true,
         'button.record': true
       })
-      select('#transcription-output').innerText = ''
+      select('.transcription-output').innerText = ''
       storage.clearSegments()
       fsm.setState('setup-recording')
     }
@@ -275,7 +275,7 @@ module.exports = function speechInput(options={}) {
   fsm.addState('finalizing', {
     enter: function() {
       if(transcriptionPromise.resolve)
-        transcriptionPromise.resolve(select('#transcription-output').innerText)
+        transcriptionPromise.resolve(select('.transcription-output').innerText)
       fsm.setState('idle')
     }
   })
@@ -285,7 +285,7 @@ module.exports = function speechInput(options={}) {
   })
 
   window.addEventListener('online', function offline() {
-    if(select('#transcription-output').innerText.length)
+    if(select('.transcription-output').innerText.length)
       fsm.setState('paused')
     else
       fsm.setState('idle')
