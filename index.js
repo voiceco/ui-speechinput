@@ -61,15 +61,19 @@ module.exports = function speechInput(options={}) {
   // https://developers.google.com/web/updates/2013/12/300ms-tap-delay-gone-away
   dom.style.touchAction = 'manipulation'
   dom.style.opacity = 0 // hidden by default
+  dom.style.display = 'grid'
+  dom.style.gridTemplateColumns = '1fr'
+  dom.style.gridTemplateRows = '1fr 40px 24px'
+
   dom.classList.add('ui-speechinput')
-  dom.innerHTML = `<div class="transcription-output"></div>
+  dom.innerHTML = `<div class="transcription-output" style="padding: 10px; overflow: auto"></div>
 <div class="control-bar" style="display: flex; flex-direction: row">
   <div class="record-container recording"></div>
   <button class="record" disabled>record</button>
   <button class="re-record" disabled>re-record</button>
   <button class="done" disabled>done</button>
 </div>
-<span class="record-error" style="padding-left: 138px"></span>`
+<span class="record-error" style="padding-left: 138px;"></span>`
 
   const recordLabel = recLabel(dom.querySelector('.record-container'))
 
