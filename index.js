@@ -320,20 +320,6 @@ module.exports = function speechInput(options={}) {
     fsm.setState('paused')
   }
 
-  const getAllRecordings = async function() {
-    if(!storage)
-      storage = await audioStorage({ objectPrefix })
-
-    return storage.getAllRecordings()
-  }
-
-  const removeRecording = async function(uuid) {
-    if(!storage)
-      storage = await audioStorage({ objectPrefix })
-
-    return storage.removeRecording(uuid)
-  }
-
   const transcribe = async function(userMeta={}) {
     if(!storage)
       storage = await audioStorage({ objectPrefix })
@@ -360,5 +346,5 @@ module.exports = function speechInput(options={}) {
     return { uuid, text: text.trim() }
   }
 
-  return Object.freeze({ cancel, dom, pause, getAllRecordings, removeRecording, transcribe })
+  return Object.freeze({ cancel, dom, pause, transcribe })
 }
