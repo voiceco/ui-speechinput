@@ -1,6 +1,6 @@
 'use strict'
 
-const audioStorage = require('./lib/storage-audio')
+const audioStorage = require('./storage')
 const fsmFactory   = require('./lib/finite-state-machine')
 const getToken     = require('./lib/watson-get-token')
 const micStream    = require('./lib/stream-microphone')

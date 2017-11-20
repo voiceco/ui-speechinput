@@ -6,7 +6,7 @@ const pubsub      = require('ev-pubsub')
 
 module.exports = async function audioStorage(options={}) {
   const { objectPrefix } = options
-  const { publish, subscribe, unsubscribe } = pubsub()
+  const { subscribe, unsubscribe } = pubsub()
 
   let currentRecording, currentSegment
 
@@ -124,10 +124,12 @@ module.exports = async function audioStorage(options={}) {
   if(localforage.INDEXEDDB !== localforage.driver())
     throw new Error('failed to run demo. could not use INDEXEDDB driver.')
 
+  // remove everything from localforage. shouldn't be enabled in production EVER
+  // this is a crappy solution to clear out staging/dev environments.
   //await localforage.clear()
 
   return Object.freeze({ clearSegments, createRecording, createSegment,
     finalizeRecording, getAllRecordings, getRecording, listRecordings,
-    setSegmentTranscription, subscribe, markUploaded, removeRecording,
-    unsubscribe, write, pipe, unpipe })
+    setSegmentTranscription, markUploaded, removeRecording,
+    write, pipe, unpipe })
 }
