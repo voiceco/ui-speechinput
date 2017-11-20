@@ -46,10 +46,10 @@ module.exports = function speechInput(options={}) {
   const { key, secret } = options
 
   if(!key)
-    throw new Error('you must specify an api key')
+    throw new Error('You must specify an API key')
 
   if(!secret)
-    throw new Error('you must specify an api secret')
+    throw new Error('You must specify an API secret')
 
   const apiHost = 'https://audio.voiceco.ai'
   const objectPrefix = 'voiceco-' + key
@@ -63,19 +63,25 @@ module.exports = function speechInput(options={}) {
   dom.style.opacity = 0 // hidden by default
   dom.style.display = 'grid'
   dom.style.gridTemplateColumns = '1fr'
-  dom.style.gridTemplateRows = '1fr 40px 24px'
+  dom.style.gridTemplateRows = '1fr 100px'
 
   dom.classList.add('ui-speechinput')
-  dom.innerHTML = `<div class="transcription-output" style="padding: 10px; overflow: auto"></div>
-<div class="control-bar" style="display: flex; flex-direction: row">
-  <div class="record-container recording"></div>
-  <button class="record" disabled>record</button>
-  <button class="re-record" disabled>re-record</button>
-  <button class="done" disabled>done</button>
-</div>
-<span class="record-error" style="padding-left: 138px;"></span>`
+  dom.innerHTML = `<div class="transcription-output" style="padding: 10px; overflow-y: scroll"></div>
+<div class="control-bar" style="display: flex; flex-direction: row; justify-content: space-between; align-items: center">
+  <button class="record" disabled style="color:red; height: 50px; width: 50px">●</button>
+  <div style="display: flex; justify-content: center">
+    <span class="record-status" style="padding-left: 8px; display: none"></span>
+    <div class="record-container recording"></div>
+  </div>
+  <div style="display: flex; flex-direction: column; justify-content: space-between">
+    <button class="re-record" style="padding: 8px" disabled>redo</button>
+    <button class="done" style="padding: 8px" disabled>done</button>
+  </div>
+</div>`
 
+  const output = dom.querySelector('.transcription-output')
   const recordLabel = recLabel(dom.querySelector('.record-container'))
+  const statusLabel = dom.querySelector('.record-status')
 
   let mic, mp3Encoder, storage
 
@@ -94,12 +100,15 @@ module.exports = function speechInput(options={}) {
 
   fsm.addState('idle', {
     enter: function(er) {
-      if (er)
-        dom.querySelector('.record-error').innerText = er
+      if (er) {
+        recordLabel.hide()
+        statusLabel.innerText = er
+        statusLabel.style.display = ''
+      }
 
-      select('.transcription-output').innerText = ''
+      output.innerText = ''
       const button = select('button.record')
-      button.innerText = 'record'
+      button.innerText = '●'
       button.onclick = function(ev) {
         button.setAttribute('disabled', true)
         fsm.setState('setup-recording')
@@ -112,7 +121,8 @@ module.exports = function speechInput(options={}) {
       })
     },
     exit: function() {
-      dom.querySelector('.record-error').innerText = ''
+      statusLabel.innerText = ''
+      statusLabel.style.display = 'none'
     }
   })
 
@@ -172,13 +182,17 @@ module.exports = function speechInput(options={}) {
       document.addEventListener('visibilitychange', _visibilityChanged)
 
       currentItem = appendItem()
-      select('.transcription-output').appendChild(currentItem)
+      output.appendChild(currentItem)
 
-      recordButton.innerText = 'pause'
+      recordButton.innerText = '⏸'
 
       sttResultStream = resultStream()
       sttResultStream.subscribe('data', function _receiveSTTResults(data) {
         currentItem.innerText = data
+        //window.scrollTo(0, document.body.scrollHeight)
+        //output.style.height = dom.clientHeight - 100 + 'px'
+        output.scrollTop = output.scrollHeight
+        //dom.parentNode.scrollTop = dom.parentNode.scrollHeight
       })
 
       speech.subscribe('error', function(er) {
@@ -250,8 +264,8 @@ module.exports = function speechInput(options={}) {
       }
 
       // disable done and re-record buttons when there's no transcription output
-      const disableDone = select('.transcription-output').innerText.trim().length === 0
-      const disableReRecord = select('.transcription-output').innerText.trim().length === 0
+      const disableDone = output.innerText.trim().length === 0
+      const disableReRecord = output.innerText.trim().length === 0
 
       setButtonDisabledStates({
         'button.re-record': disableReRecord,
@@ -259,7 +273,7 @@ module.exports = function speechInput(options={}) {
         'button.record': false
       })
 
-      recordButton.innerText = 'record'
+      recordButton.innerText = '●'
     }
   })
 
@@ -270,7 +284,7 @@ module.exports = function speechInput(options={}) {
         'button.done': true,
         'button.record': true
       })
-      select('.transcription-output').innerText = ''
+      output.innerText = ''
       storage.clearSegments()
       fsm.setState('setup-recording')
     }
@@ -279,7 +293,7 @@ module.exports = function speechInput(options={}) {
   fsm.addState('finalizing', {
     enter: function() {
       if(transcriptionPromise.resolve)
-        transcriptionPromise.resolve(select('.transcription-output').innerText)
+        transcriptionPromise.resolve(output.innerText)
       fsm.setState('idle')
     }
   })
@@ -289,7 +303,7 @@ module.exports = function speechInput(options={}) {
   })
 
   window.addEventListener('online', function offline() {
-    if(select('.transcription-output').innerText.length)
+    if(output.innerText.length)
       fsm.setState('paused')
     else
       fsm.setState('idle')
@@ -323,6 +337,8 @@ module.exports = function speechInput(options={}) {
   const transcribe = async function(userMeta={}) {
     if(!storage)
       storage = await audioStorage({ objectPrefix })
+
+    //output.style.height = dom.clientHeight - 100 + 'px'
 
     if(transcriptionPromise.resolve)
       throw new Error('cannot transcribe more than 1 audio at a time')
