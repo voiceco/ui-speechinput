@@ -2,6 +2,7 @@
 
 const localforage = require('localforage')
 const pubsub      = require('ev-pubsub')
+const toEntry     = require('./lib/convert-cached-audio-to-entry')
 
 
 module.exports = async function audioStorage(options={}) {
@@ -9,6 +10,7 @@ module.exports = async function audioStorage(options={}) {
   const { subscribe, unsubscribe } = pubsub()
 
   let currentRecording, currentSegment
+
 
   // @param uuid  v4 uuid of recording
   // @param meta  optional object containing custom metadata
@@ -31,6 +33,7 @@ module.exports = async function audioStorage(options={}) {
     }
   }
 
+
   // remove all segments from the current recording
   const clearSegments = function() {
     if(!currentRecording)
@@ -38,6 +41,7 @@ module.exports = async function audioStorage(options={}) {
 
     currentRecording.segments.length = 0
   }
+
 
   const createSegment = function() {
     if(!currentRecording)
@@ -50,6 +54,7 @@ module.exports = async function audioStorage(options={}) {
 
     currentRecording.segments.push(currentSegment)
   }
+
 
   const finalizeRecording = async function() {
     if(!currentRecording)
@@ -64,6 +69,7 @@ module.exports = async function audioStorage(options={}) {
     currentSegment = undefined
   }
 
+
   const getAllRecordings = async function() {
     const list = await listRecordings()
     const pile = []
@@ -73,10 +79,24 @@ module.exports = async function audioStorage(options={}) {
     return Promise.all(pile)
   }
 
+
+  const getFinalizedRecordings = async function() {
+    const list = await listRecordings()
+    const pile = []
+    list.forEach(async function(audioId) {
+      const entry = await getRecording(audioId)
+      if(entry.meta.finalized)
+        pile.push(toEntry(entry))
+    })
+    return pile
+  }
+
+
   const getRecording = async function(uuid) {
     const key = uuid.indexOf(objectPrefix) === 0 ? uuid : `${objectPrefix}-${uuid}`
     return localforage.getItem(key)
   }
+
 
   const listRecordings = async function() {
     const keys = await localforage.keys()
@@ -84,6 +104,7 @@ module.exports = async function audioStorage(options={}) {
       return k.indexOf(objectPrefix) === 0
     })
   }
+
 
   const markUploaded = async function(audioId) {
     const recording = await getRecording(audioId)
@@ -93,30 +114,36 @@ module.exports = async function audioStorage(options={}) {
     }
   }
 
+
   // removes recording from local cache
   const removeRecording = async function(audioId) {
     return localforage.removeItem(`${objectPrefix}-${audioId}`)
   }
+
 
   const setSegmentTranscription = function(transcription) {
     if(currentSegment)
       currentSegment.transcription = transcription
   }
 
+
   const pipe = function(destination) {
     subscribe('data', destination.write)
     return destination
   }
 
+
   const unpipe = function(destination) {
     unsubscribe('data', destination ? destination.write : undefined)
   }
+
 
   // send audio data to the current segement
   const write = function(data) {
     if(currentSegment && data.byteLength)
       currentSegment.data.push(data)
   }
+
 
   localforage.setDriver(localforage.INDEXEDDB)
   await localforage.ready()
@@ -129,7 +156,7 @@ module.exports = async function audioStorage(options={}) {
   //await localforage.clear()
 
   return Object.freeze({ clearSegments, createRecording, createSegment,
-    finalizeRecording, getAllRecordings, getRecording, listRecordings,
-    setSegmentTranscription, markUploaded, removeRecording,
+    finalizeRecording, getAllRecordings, getFinalizedRecordings, getRecording,
+    listRecordings, setSegmentTranscription, markUploaded, removeRecording,
     write, pipe, unpipe })
 }
