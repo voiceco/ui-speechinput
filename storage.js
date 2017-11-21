@@ -83,11 +83,12 @@ module.exports = async function audioStorage(options={}) {
   const getFinalizedRecordings = async function() {
     const list = await listRecordings()
     const pile = []
-    list.forEach(async function(audioId) {
-      const entry = await getRecording(audioId)
+    for(let i=0; i < list.length; i++) {
+      let audioId = list[i]
+      let entry = await getRecording(audioId)
       if(entry.meta.finalized)
         pile.push(toEntry(entry))
-    })
+    }
     return pile
   }
 
