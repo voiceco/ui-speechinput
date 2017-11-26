@@ -210,7 +210,7 @@ process.umask = function() { return 0; };
 },{}],3:[function(require,module,exports){
 'use strict'
 
-const audioStorage = require('./lib/storage-audio')
+const audioStorage = require('./storage')
 const fsmFactory   = require('./lib/finite-state-machine')
 const getToken     = require('./lib/watson-get-token')
 const micStream    = require('./lib/stream-microphone')
@@ -224,8 +224,7 @@ const watsonSTT    = require('./lib/watson-stt')
 
 
 /*
-finite state machine for speechinput widget
-initial state: IDLE
+finite state machine for speechinput widget. initial state: IDLE
 
           ┌----┐
 ┌---┬---> |IDLE├-------┐
@@ -257,10 +256,10 @@ module.exports = function speechInput(options={}) {
   const { key, secret } = options
 
   if(!key)
-    throw new Error('you must specify an api key')
+    throw new Error('You must specify an API key')
 
   if(!secret)
-    throw new Error('you must specify an api secret')
+    throw new Error('You must specify an API secret')
 
   const apiHost = 'https://audio.voiceco.ai'
   const objectPrefix = 'voiceco-' + key
@@ -272,25 +271,54 @@ module.exports = function speechInput(options={}) {
   // https://developers.google.com/web/updates/2013/12/300ms-tap-delay-gone-away
   dom.style.touchAction = 'manipulation'
   dom.style.opacity = 0 // hidden by default
+  dom.style.display = 'grid'
+  dom.style.gridTemplateColumns = '1fr'
+  dom.style.gridTemplateRows = '1fr 100px'
+
   dom.classList.add('ui-speechinput')
-  dom.innerHTML = `<div id="transcription-output"></div>
-<div class="control-bar" style="display: flex; flex-direction: row">
-  <div class="record-container recording"></div>
-  <button class="record" disabled>record</button>
-  <button class="re-record" disabled>re-record</button>
-  <button class="done" disabled>done</button>
+  dom.innerHTML = `<div class="transcription-output" style="padding: 10px; overflow-y: scroll"></div>
+<div class="control-bar" style="display: flex; flex-direction: row; justify-content: space-between; align-items: center">
+  <button class="record" disabled style="color:red; height: 50px; width: 50px">●</button>
+  <div style="display: flex; justify-content: center">
+    <span class="record-status" style="padding-left: 8px; display: none"></span>
+    <div class="record-container recording"></div>
+  </div>
+  <div style="display: flex; flex-direction: column; justify-content: space-between">
+    <button class="re-record" style="padding: 8px" disabled>redo</button>
+    <button class="done" style="padding: 8px" disabled>done</button>
+  </div>
 </div>`
 
+  const output = dom.querySelector('.transcription-output')
   const recordLabel = recLabel(dom.querySelector('.record-container'))
+  const statusLabel = dom.querySelector('.record-status')
+
+  let mic, mp3Encoder, storage
+
+  const transcriptionPromise = {
+    resolve: undefined,
+    reject: undefined
+  }
+  const speech = watsonSTT({ interim_results: true, smart_formatting: true })
+
+  const recordButton = dom.querySelector('button.record')
+  press.once(recordButton, function(ev) {
+    mic = micStream()
+    mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
+  })
+
 
   fsm.addState('idle', {
     enter: function(er) {
-      if (er)
-        console.error('TODO: display a UI error for:', er)
+      if (er) {
+        recordLabel.hide()
+        statusLabel.innerText = er
+        statusLabel.style.display = ''
+      }
 
-      select('#transcription-output').innerText = ''
+      output.innerText = ''
       const button = select('button.record')
-      button.innerText = 'record'
+      button.innerText = '●'
       button.onclick = function(ev) {
         button.setAttribute('disabled', true)
         fsm.setState('setup-recording')
@@ -301,6 +329,10 @@ module.exports = function speechInput(options={}) {
         'button.done': true,
         'button.record': false
       })
+    },
+    exit: function() {
+      statusLabel.innerText = ''
+      statusLabel.style.display = 'none'
     }
   })
 
@@ -317,19 +349,6 @@ module.exports = function speechInput(options={}) {
         select(selector).removeAttribute('disabled')
     })
   }
-
-  let mic, mp3Encoder, storage
-  const transcriptionPromise = {
-    resolve: undefined,
-    reject: undefined
-  }
-  const speech = watsonSTT({ interim_results: true, smart_formatting: true })
-
-  const recordButton = dom.querySelector('button.record')
-  press.once(recordButton, function(ev) {
-    mic = micStream()
-    mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
-  })
 
   fsm.addState('offline', {
     enter: function() {
@@ -349,6 +368,7 @@ module.exports = function speechInput(options={}) {
         'button.record': true,
       })
 
+      recordLabel.show('initializing', '#54dd9d')
       try {
         const token = await getToken(apiHost + '/token')
         speech.recognizeStart(token)
@@ -372,13 +392,17 @@ module.exports = function speechInput(options={}) {
       document.addEventListener('visibilitychange', _visibilityChanged)
 
       currentItem = appendItem()
-      select('#transcription-output').appendChild(currentItem)
+      output.appendChild(currentItem)
 
-      recordButton.innerText = 'pause'
+      recordButton.innerText = '⏸'
 
       sttResultStream = resultStream()
       sttResultStream.subscribe('data', function _receiveSTTResults(data) {
         currentItem.innerText = data
+        //window.scrollTo(0, document.body.scrollHeight)
+        //output.style.height = dom.clientHeight - 100 + 'px'
+        output.scrollTop = output.scrollHeight
+        //dom.parentNode.scrollTop = dom.parentNode.scrollHeight
       })
 
       speech.subscribe('error', function(er) {
@@ -449,13 +473,17 @@ module.exports = function speechInput(options={}) {
         fsm.setState('finalizing')
       }
 
+      // disable done and re-record buttons when there's no transcription output
+      const disableDone = output.innerText.trim().length === 0
+      const disableReRecord = output.innerText.trim().length === 0
+
       setButtonDisabledStates({
-        'button.re-record': false,
-        'button.done': false,
+        'button.re-record': disableReRecord,
+        'button.done': disableDone,
         'button.record': false
       })
 
-      recordButton.innerText = 'record'
+      recordButton.innerText = '●'
     }
   })
 
@@ -466,7 +494,7 @@ module.exports = function speechInput(options={}) {
         'button.done': true,
         'button.record': true
       })
-      select('#transcription-output').innerText = ''
+      output.innerText = ''
       storage.clearSegments()
       fsm.setState('setup-recording')
     }
@@ -475,7 +503,7 @@ module.exports = function speechInput(options={}) {
   fsm.addState('finalizing', {
     enter: function() {
       if(transcriptionPromise.resolve)
-        transcriptionPromise.resolve(select('#transcription-output').innerText)
+        transcriptionPromise.resolve(output.innerText)
       fsm.setState('idle')
     }
   })
@@ -485,19 +513,28 @@ module.exports = function speechInput(options={}) {
   })
 
   window.addEventListener('online', function offline() {
-    if(select('#transcription-output').innerText.length)
+    if(output.innerText.length)
       fsm.setState('paused')
     else
       fsm.setState('idle')
   })
 
-  const pauseTranscription = function() {
+  const cancel = function() {
+    pause()
+    dom.style.opacity = 0
+    transcriptionPromise.resolve = undefined
+    transcriptionPromise.rej = undefined
+  }
+
+  const pause = function() {
     fsm.setState('paused')
   }
 
   const transcribe = async function(userMeta={}) {
     if(!storage)
       storage = await audioStorage({ objectPrefix })
+
+    //output.style.height = dom.clientHeight - 100 + 'px'
 
     if(transcriptionPromise.resolve)
       throw new Error('cannot transcribe more than 1 audio at a time')
@@ -519,10 +556,35 @@ module.exports = function speechInput(options={}) {
     return { uuid, text: text.trim() }
   }
 
-  return Object.freeze({ dom, transcribe, pauseTranscription })
+  return Object.freeze({ cancel, dom, pause, transcribe })
 }
 
-},{"./lib/finite-state-machine":4,"./lib/press":5,"./lib/storage-audio":6,"./lib/stream-microphone":7,"./lib/sync-manager":8,"./lib/ui-recordinglabel":10,"./lib/watson-get-token":11,"./lib/watson-stt":13,"./lib/watson-stt-result-stream":12,"./lib/webaudio-mp3-stream":15,"uuid/v4":27}],4:[function(require,module,exports){
+},{"./lib/finite-state-machine":5,"./lib/press":6,"./lib/stream-microphone":7,"./lib/sync-manager":8,"./lib/ui-recordinglabel":10,"./lib/watson-get-token":11,"./lib/watson-stt":13,"./lib/watson-stt-result-stream":12,"./lib/webaudio-mp3-stream":15,"./storage":29,"uuid/v4":27}],4:[function(require,module,exports){
+'use strict'
+
+module.exports = function convertCachedAudioToEntry (entry) {
+  const parts = []
+  const transcriptions = []
+  entry.segments.forEach(function(s) {
+    transcriptions.push(s.transcription)
+    s.data.forEach(function(s2) {
+      parts.push(s2)
+    })
+  })
+
+  const audioBlob = new Blob(parts, { type: entry.meta.type })
+
+  return {
+    created: entry.meta.created,
+    custom: entry.meta.custom,
+    fileURL: URL.createObjectURL(audioBlob),
+    id: entry.uuid,
+    transcriptions,
+    type: entry.meta.type
+  }
+}
+
+},{}],5:[function(require,module,exports){
 'use strict'
 
 module.exports = function fsm(options={}) {
@@ -547,13 +609,13 @@ module.exports = function fsm(options={}) {
 
     if (currentState) {
       if (verbose)
-        console.log(verbose, 'exiting state', currentState)
+        console.log('exiting state', currentState)
       if(states[currentState].exit)
         await states[currentState].exit()
     }
 
     if (verbose)
-      console.log(verbose, 'entering state', stateName)
+      console.log('entering state', stateName)
     currentState = stateName
     if(states[currentState].enter)
       await states[currentState].enter(...args)
@@ -562,7 +624,7 @@ module.exports = function fsm(options={}) {
   return Object.freeze({ addState, getCurrentState, setState })
 }
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 'use strict'
 
 const isTouch = require('is-touch')
@@ -609,134 +671,7 @@ module.exports = {
   }
 }
 
-},{"is-touch":19}],6:[function(require,module,exports){
-'use strict'
-
-const localforage = require('localforage')
-const pubsub      = require('ev-pubsub')
-
-
-/*
-const audioBlob = new Blob(recordings[key].segments, { type: recordings[key].meta.type })
-const objectURL = URL.createObjectURL(audioBlob)
-const a = new Audio(objectURL)
-a.play()
-*/
-
-module.exports = async function audioStorage(options={}) {
-  const { objectPrefix } = options
-  const { publish, subscribe, unsubscribe } = pubsub()
-
-  let currentRecording, currentSegment
-
-  // @param uuid  v4 uuid of recording
-  // @param meta  optional object containing custom metadata
-  const createRecording = async function(uuid, meta={}) {
-    currentRecording = await getRecording(uuid)
-
-    if(currentRecording)
-      throw new Error('could not create new recording: ' + uuid + ' already exists in storage')
-
-    currentRecording = {
-      uuid,
-      meta: {
-        created: Date.now(),
-        finalized: false,
-        syncedToServer: false,
-        type: 'audio/mp3',
-        custom: meta
-      },
-      segments: [ ]
-    }
-  }
-
-  // remove all segments from the current recording
-  const clearSegments = function() {
-    if(!currentRecording)
-      return
-
-    currentRecording.segments.length = 0
-  }
-
-  const createSegment = function() {
-    if(!currentRecording)
-      return
-
-    currentSegment = {
-      data: [], // arraybuffers constituting audio data
-      transcription: ''
-    }
-
-    currentRecording.segments.push(currentSegment)
-  }
-
-  const finalizeRecording = async function() {
-    if(!currentRecording)
-      return
-
-    // TODO: approximate duration from byte length
-    // (will be updated to more accurate duration once sync'd to backend)
-
-    currentRecording.meta.finalized = true
-    await localforage.setItem(`${objectPrefix}-${currentRecording.uuid}`, currentRecording)
-    currentRecording = undefined
-    currentSegment = undefined
-  }
-
-  const getRecording = async function(uuid) {
-    const key = uuid.indexOf(objectPrefix) === 0 ? uuid : `${objectPrefix}-${uuid}`
-    return localforage.getItem(key)
-  }
-
-  const listRecordings = async function() {
-    const keys = await localforage.keys()
-    return keys.filter(function(k) {
-      return k.indexOf(objectPrefix) === 0
-    })
-  }
-
-  const markUploaded = async function(audioId) {
-    const recording = await getRecording(audioId)
-    if(recording) {
-      recording.meta.syncedToServer = true
-      await localforage.setItem(`${objectPrefix}-${recording.uuid}`, recording)
-    }
-  }
-
-  const setSegmentTranscription = function(transcription) {
-    if(currentSegment)
-      currentSegment.transcription = transcription
-  }
-
-  const pipe = function(destination) {
-    subscribe('data', destination.write)
-    return destination
-  }
-
-  const unpipe = function(destination) {
-    unsubscribe('data', destination ? destination.write : undefined)
-  }
-
-  // send audio data to the current segement
-  const write = function(data) {
-    if(currentSegment && data.byteLength)
-      currentSegment.data.push(data)
-  }
-
-  localforage.setDriver(localforage.INDEXEDDB)
-  await localforage.ready()
-
-  if(localforage.INDEXEDDB !== localforage.driver())
-    throw new Error('failed to run demo. could not use INDEXEDDB driver.')
-
-  //await localforage.clear()
-
-  return Object.freeze({ clearSegments, createRecording, createSegment, finalizeRecording,
-    getRecording, listRecordings, setSegmentTranscription, subscribe, markUploaded,
-    unsubscribe, write, pipe, unpipe })
-}
-
-},{"ev-pubsub":16,"localforage":20}],7:[function(require,module,exports){
+},{"is-touch":19}],7:[function(require,module,exports){
 'use strict'
 
 const getUserMedia = require('get-user-media-promise')
@@ -778,6 +713,12 @@ module.exports = function microphoneStream() {
     const left = e.inputBuffer.getChannelData(0)
     publish('data', left)
   }
+
+
+  const getMediaStream = function() {
+    return mediaStream
+  }
+
 
   const pipe = function(destination) {
     subscribe('data', destination.write)
@@ -843,7 +784,7 @@ module.exports = function microphoneStream() {
     mediaStream = undefined
   }
 
-  return Object.freeze({ pipe, unpipe, start, stop, sampleRate: audioContext.sampleRate })
+  return Object.freeze({ getMediaStream, pipe, unpipe, start, stop, sampleRate: audioContext.sampleRate })
 }
 
 },{"ev-pubsub":16,"get-user-media-promise":17}],8:[function(require,module,exports){
@@ -871,7 +812,7 @@ module.exports = function syncManager (options={}) {
   const { objectPrefix, apiHost, apiId, apiSecret } = options
   const uid = uuid()  // unique id of the sync manager
 
-  const fsm = fsmFactory({ verbose: true})
+  const fsm = fsmFactory()
 
   function idleState () {
     let _interval
@@ -879,7 +820,7 @@ module.exports = function syncManager (options={}) {
     const WORKER_TIMEOUT = 30000 // milliseconds
 
     const _startSync = function() {
-      console.log('sync-manager', uid, 'is running sync')
+      //console.log('sync-manager', uid, 'is running sync')
       sessionStorage.setItem('sync-owner', uid)
       sessionStorage.setItem('sync-last-ping', Date.now())
       fsm.setState('SYNCING')
@@ -936,10 +877,10 @@ module.exports = function syncManager (options={}) {
   fsm.setState('IDLE')
 }
 
-},{"../finite-state-machine":4,"./sync-worker":9,"lockable-storage":21,"webworkify":28}],9:[function(require,module,exports){
+},{"../finite-state-machine":5,"./sync-worker":9,"lockable-storage":21,"webworkify":28}],9:[function(require,module,exports){
 'use strict'
 
-const storage = require('../storage-audio')
+const storage = require('../../storage')
 
 
 module.exports = function(self) {
@@ -1047,35 +988,34 @@ module.exports = function(self) {
     }
   }
 
-  console.log('setting up sync-worker')
   self.addEventListener('message', function(e) {
     if(e.data.topic === 'init')
       init(e.data)
   })
 }
 
-},{"../storage-audio":6}],10:[function(require,module,exports){
+},{"../../storage":29}],10:[function(require,module,exports){
 'use strict'
 
 module.exports = function recordingLabel(dom) {
-  dom.innerHTML = `<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+  dom.innerHTML = `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
    width="30px" height="30px" viewBox="0 0 24 30" style="enable-background:new 0 0 50 50;" xml:space="preserve">
-  <rect x="0" y="10" width="4" height="10" fill="#fff" opacity="0.2">
+  <rect x="0" y="10" width="4" height="10" fill="#f00" opacity="0.2">
     <animate attributeName="opacity" attributeType="XML" values="0.2; 1; .2" begin="0s" dur="1s" repeatCount="indefinite" />
     <animate attributeName="height" attributeType="XML" values="10; 20; 10" begin="0s" dur="1s" repeatCount="indefinite" />
     <animate attributeName="y" attributeType="XML" values="10; 5; 10" begin="0s" dur="1s" repeatCount="indefinite" />
   </rect>
-  <rect x="8" y="10" width="4" height="10" fill="#fff"  opacity="0.2">
+  <rect x="8" y="10" width="4" height="10" fill="#f00"  opacity="0.2">
     <animate attributeName="opacity" attributeType="XML" values="0.2; 1; .2" begin="0.15s" dur="1s" repeatCount="indefinite" />
     <animate attributeName="height" attributeType="XML" values="10; 20; 10" begin="0.15s" dur="1s" repeatCount="indefinite" />
     <animate attributeName="y" attributeType="XML" values="10; 5; 10" begin="0.15s" dur="1s" repeatCount="indefinite" />
   </rect>
-  <rect x="16" y="10" width="4" height="10" fill="#fff"  opacity="0.2">
+  <rect x="16" y="10" width="4" height="10" fill="#f00"  opacity="0.2">
     <animate attributeName="opacity" attributeType="XML" values="0.2; 1; .2" begin="0.3s" dur="1s" repeatCount="indefinite" />
     <animate attributeName="height" attributeType="XML" values="10; 20; 10" begin="0.3s" dur="1s" repeatCount="indefinite" />
     <animate attributeName="y" attributeType="XML" values="10; 5; 10" begin="0.3s" dur="1s" repeatCount="indefinite" />
   </rect>
-<rect x="24" y="10" width="4" height="10" fill="#fff"  opacity="0.2">
+<rect x="24" y="10" width="4" height="10" fill="#f00"  opacity="0.2">
     <animate attributeName="opacity" attributeType="XML" values="0.2; 1; .2" begin="0.45s" dur="1s" repeatCount="indefinite" />
     <animate attributeName="height" attributeType="XML" values="10; 20; 10" begin="0.45s" dur="1s" repeatCount="indefinite" />
     <animate attributeName="y" attributeType="XML" values="10; 5; 10" begin="0.45s" dur="1s" repeatCount="indefinite" />
@@ -1084,27 +1024,22 @@ module.exports = function recordingLabel(dom) {
 <span style="padding-left:8px">recording</span>
 `
 
-  dom.style.color = 'white'
+  dom.style.color = 'rgba(255, 0, 0, 0.92)'
   dom.style.display = 'flex'
   dom.style.justifyContent = 'center'
   dom.style.alignItems = 'center'
-  dom.style.backgroundColor = 'rgba(255, 0, 0, 0.92)'
-  dom.style.minWidth = '120px'
-  dom.style.marginRight = '10px'
-  dom.style.padding = '4px'
-  //dom.style.position = 'relative'
-  //dom.style.bottom ='0px'
-  //dom.style.right = '8px'
-  //dom.style.left = '8px'
   dom.style.transitionDuration = '0.2s'
   dom.style.opacity = 0
 
-  const show = function() {
+  const show = function(text='recording', color='rgba(255, 0, 0, 0.92)') {
+    dom.querySelector('span').innerText = text
+    dom.style.display = 'flex'
     dom.style.opacity = 1
   }
 
   const hide = function() {
     dom.style.opacity = 0
+    dom.style.display = 'none'
   }
 
   return Object.freeze({ dom, show, hide })
@@ -1121,20 +1056,21 @@ module.exports = async function getToken(url='/token') {
 
   if(token) {
     token = JSON.parse(token)
-    if (Date.now() < token.expiresAt) {
-      // there is at least 10 minutes remaining on the token, it's valid
+    // there is at least 10 minutes remaining on the token, it's valid
+    if (Date.now() < token.expiresAt)
       return token.value
-    }
   }
 
-  token = await fetch(url)
-  token = await token.text()
-
-  localStorage.setItem('watson-stt-token', JSON.stringify({
-    value: token,
-    // watson STT tokens last for an hour. Don't use a token with less than 10 minutes remaining
-    expiresAt: Date.now() + FIFTY_MINUTES_IN_MILLISECONDS
-  }))
+  const response = await fetch(url)
+  if(response && response.status == 200) {
+    let body = await response.json()
+    token = body.token
+    localStorage.setItem('watson-stt-token', JSON.stringify({
+      value: token,
+      // watson STT tokens last for an hour. Don't use a token with less than 10 minutes remaining
+      expiresAt: Date.now() + FIFTY_MINUTES_IN_MILLISECONDS
+    }))
+  }
 
   return token
 }
@@ -1183,24 +1119,21 @@ module.exports = function watsonSTTResultStream(options={}) {
 
     transcriptions[data.result_index] = data
 
-    let next, text = ''
+    let tt, text = ''
+
+    const replacer = new RegExp('%HESITATION', 'g')
 
     const current = _getTranscriptions()
-    for(let k=0; k < current.length; k++) {
-      next = current[k]
-      for(let i=0; i < next.results.length; i++) {
-        for(let j=0; j < next.results[i].alternatives.length; j++) {
-          let tt = next.results[i].alternatives[j].transcript.replace('%HESITATION', '').trim()
-          if (text.length === 0)
-            text = tt.charAt(0).toUpperCase() + tt.slice(1)
-          else
-            text += tt
-        }
+    current.forEach(function(next) {
+      if(next.results.length && next.results[0].alternatives.length) {
+        tt = next.results[0].alternatives[0].transcript.replace(replacer, '').trim()
+        // only punctuate completed (final) sentences
+        if(next.results[0].final)
+          text += (tt.charAt(0).toUpperCase() + tt.slice(1) + '.  ')
+        else
+          text += tt
       }
-
-      // only punctuate multiple sentences
-      if (current.length > 1) text += '. '
-    }
+    })
 
     publish('data', text)
   }
@@ -1437,7 +1370,6 @@ module.exports = function watsonSpeechToText(options={}) {
         socket.onmessage = function(data) {
           const state = fsm.getCurrentState()
           const message = JSON.parse(data.data)
-          //console.log('W:', message)
           if(state && state.onmessage) {
             state.onmessage(message)
           }
@@ -1466,7 +1398,7 @@ module.exports = function watsonSpeechToText(options={}) {
   return Object.freeze({ close, pipe, recognizeStart, recognizeStop, unpipe, subscribe, unsubscribe, write })
 }
 
-},{"./finite-state-machine":4,"ev-pubsub":16,"lodash.pick":22}],14:[function(require,module,exports){
+},{"./finite-state-machine":5,"ev-pubsub":16,"lodash.pick":22}],14:[function(require,module,exports){
 'use strict'
 
 //const lamejs = require('lamejs')
@@ -1808,7 +1740,7 @@ module.exports = isNode
 (function (global){
 /*!
     localForage -- Offline Storage, Improved
-    Version 1.5.2
+    Version 1.5.3
     https://localforage.github.io/localForage
     (c) 2013-2017 Mozilla, Apache License 2.0
 */
@@ -3621,6 +3553,28 @@ function isLocalStorageValid() {
     }
 }
 
+// Check if localStorage throws when saving an item
+function checkIfLocalStorageThrows() {
+    var localStorageTestKey = '_localforage_support_test';
+
+    try {
+        localStorage.setItem(localStorageTestKey, true);
+        localStorage.removeItem(localStorageTestKey);
+
+        return false;
+    } catch (e) {
+        return true;
+    }
+}
+
+// Check if localStorage is usable and allows to save an item
+// This method checks if localStorage is usable in Safari Private Browsing
+// mode, or in any other case where the available quota for localStorage
+// is 0 and there wasn't any saved items yet.
+function _isLocalStorageUsable() {
+    return !checkIfLocalStorageThrows() || localStorage.length > 0;
+}
+
 // Config the localStorage backend, using options set in the config.
 function _initStorage$2(options) {
     var self = this;
@@ -3635,6 +3589,10 @@ function _initStorage$2(options) {
 
     if (dbInfo.storeName !== self._defaultConfig.storeName) {
         dbInfo.keyPrefix += dbInfo.storeName + '/';
+    }
+
+    if (!_isLocalStorageUsable()) {
+        return Promise$1.reject();
     }
 
     self._dbInfo = dbInfo;
@@ -3767,8 +3725,9 @@ function keys$2(callback) {
         var keys = [];
 
         for (var i = 0; i < length; i++) {
-            if (localStorage.key(i).indexOf(dbInfo.keyPrefix) === 0) {
-                keys.push(localStorage.key(i).substring(dbInfo.keyPrefix.length));
+            var itemKey = localStorage.key(i);
+            if (itemKey.indexOf(dbInfo.keyPrefix) === 0) {
+                keys.push(itemKey.substring(dbInfo.keyPrefix.length));
             }
         }
 
@@ -5073,7 +5032,7 @@ module.exports = function (fn, options) {
             wcache[key] = key;
         }
         sources[wkey] = [
-            Function(['require','module','exports'], '(' + fn + ')(self)'),
+            'function(require,module,exports){' + fn + '(self); }',
             wcache
         ];
     }
@@ -5081,12 +5040,11 @@ module.exports = function (fn, options) {
 
     var scache = {}; scache[wkey] = wkey;
     sources[skey] = [
-        Function(['require'], (
-            // try to call default if defined to also support babel esmodule
-            // exports
+        'function(require,module,exports){' +
+            // try to call default if defined to also support babel esmodule exports
             'var f = require(' + stringify(wkey) + ');' +
-            '(f.default ? f.default : f)(self);'
-        )),
+            '(f.default ? f.default : f)(self);' +
+        '}',
         scache
     ];
 
@@ -5124,4 +5082,169 @@ module.exports = function (fn, options) {
     return worker;
 };
 
-},{}]},{},[1]);
+},{}],29:[function(require,module,exports){
+'use strict'
+
+const localforage = require('localforage')
+const pubsub      = require('ev-pubsub')
+const toEntry     = require('./lib/convert-cached-audio-to-entry')
+
+
+module.exports = async function audioStorage(options={}) {
+  const { objectPrefix } = options
+  const { subscribe, unsubscribe } = pubsub()
+
+  let currentRecording, currentSegment
+
+
+  // @param uuid  v4 uuid of recording
+  // @param meta  optional object containing custom metadata
+  const createRecording = async function(uuid, meta={}) {
+    currentRecording = await getRecording(uuid)
+
+    if(currentRecording)
+      throw new Error('could not create new recording: ' + uuid + ' already exists in storage')
+
+    currentRecording = {
+      uuid,
+      meta: {
+        created: Date.now(),
+        finalized: false,
+        syncedToServer: false,
+        type: 'audio/mp3',
+        custom: meta
+      },
+      segments: [ ]
+    }
+  }
+
+
+  // remove all segments from the current recording
+  const clearSegments = function() {
+    if(!currentRecording)
+      return
+
+    currentRecording.segments.length = 0
+  }
+
+
+  const createSegment = function() {
+    if(!currentRecording)
+      return
+
+    currentSegment = {
+      data: [], // arraybuffers constituting audio data
+      transcription: ''
+    }
+
+    currentRecording.segments.push(currentSegment)
+  }
+
+
+  const finalizeRecording = async function() {
+    if(!currentRecording)
+      return
+
+    // TODO: approximate duration from byte length
+    // (will be updated to more accurate duration once sync'd to backend)
+
+    currentRecording.meta.finalized = true
+    await localforage.setItem(`${objectPrefix}-${currentRecording.uuid}`, currentRecording)
+    currentRecording = undefined
+    currentSegment = undefined
+  }
+
+
+  const getAllRecordings = async function() {
+    const list = await listRecordings()
+    const pile = []
+    list.forEach(function(audioId) {
+      pile.push(getRecording(audioId))
+    })
+    return Promise.all(pile)
+  }
+
+
+  const getFinalizedRecordings = async function() {
+    const list = await listRecordings()
+    const pile = []
+    for(let i=0; i < list.length; i++) {
+      let audioId = list[i]
+      let entry = await getRecording(audioId)
+      if(entry.meta.finalized)
+        pile.push(toEntry(entry))
+    }
+    return pile
+  }
+
+
+  const getRecording = async function(uuid) {
+    const key = uuid.indexOf(objectPrefix) === 0 ? uuid : `${objectPrefix}-${uuid}`
+    return localforage.getItem(key)
+  }
+
+
+  const listRecordings = async function() {
+    const keys = await localforage.keys()
+    return keys.filter(function(k) {
+      return k.indexOf(objectPrefix) === 0
+    })
+  }
+
+
+  const markUploaded = async function(audioId) {
+    const recording = await getRecording(audioId)
+    if(recording) {
+      recording.meta.syncedToServer = true
+      await localforage.setItem(`${objectPrefix}-${recording.uuid}`, recording)
+    }
+  }
+
+
+  // removes recording from local cache
+  const removeRecording = async function(audioId) {
+    return localforage.removeItem(`${objectPrefix}-${audioId}`)
+  }
+
+
+  const setSegmentTranscription = function(transcription) {
+    if(currentSegment)
+      currentSegment.transcription = transcription
+  }
+
+
+  const pipe = function(destination) {
+    subscribe('data', destination.write)
+    return destination
+  }
+
+
+  const unpipe = function(destination) {
+    unsubscribe('data', destination ? destination.write : undefined)
+  }
+
+
+  // send audio data to the current segement
+  const write = function(data) {
+    if(currentSegment && data.byteLength)
+      currentSegment.data.push(data)
+  }
+
+
+  localforage.setDriver(localforage.INDEXEDDB)
+  await localforage.ready()
+
+  if(localforage.INDEXEDDB !== localforage.driver())
+    throw new Error('failed to run demo. could not use INDEXEDDB driver.')
+
+  // remove everything from localforage. shouldn't be enabled in production EVER
+  // this is a crappy solution to clear out staging/dev environments.
+  //await localforage.clear()
+
+  return Object.freeze({ clearSegments, createRecording, createSegment,
+    finalizeRecording, getAllRecordings, getFinalizedRecordings, getRecording,
+    listRecordings, setSegmentTranscription, markUploaded, removeRecording,
+    write, pipe, unpipe })
+}
+
+},{"./lib/convert-cached-audio-to-entry":4,"ev-pubsub":16,"localforage":20}]},{},[1]);
