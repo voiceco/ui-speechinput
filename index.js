@@ -67,12 +67,9 @@ module.exports = function speechInput(options={}) {
 
   dom.classList.add('ui-speechinput')
   dom.innerHTML = `<div class="transcription-output" style="padding: 10px; overflow-y: scroll"></div>
-<div class="control-bar" style="display: flex; flex-direction: row; justify-content: space-between; align-items: center">
+<div class="control-bar" style="display: grid; grid-template-rows: 1fr; grid-template-columns: 1fr 3fr 1fr; justify-content: space-between; align-items: center">
   <button class="record" disabled style="color:red; height: 50px; width: 50px">●</button>
-  <div style="display: flex; justify-content: center">
-    <span class="record-status" style="padding-left: 8px; display: none"></span>
-    <div class="record-container recording"></div>
-  </div>
+  <div class="output" style="display: flex; justify-content: center"> </div>
   <div style="display: flex; flex-direction: column; justify-content: space-between">
     <button class="re-record" style="padding: 8px" disabled>redo</button>
     <button class="done" style="padding: 8px" disabled>done</button>
@@ -80,8 +77,7 @@ module.exports = function speechInput(options={}) {
 </div>`
 
   const output = dom.querySelector('.transcription-output')
-  const recordLabel = recLabel(dom.querySelector('.record-container'))
-  const statusLabel = dom.querySelector('.record-status')
+  const recordLabel = recLabel(dom.querySelector('.output'))
 
   let mic, mp3Encoder, storage
 
@@ -100,11 +96,8 @@ module.exports = function speechInput(options={}) {
 
   fsm.addState('idle', {
     enter: function(er) {
-      if (er) {
-        recordLabel.hide()
-        statusLabel.innerText = er
-        statusLabel.style.display = ''
-      }
+      if (er)
+        recordLabel.error(er)
 
       output.innerText = ''
       const button = select('button.record')
@@ -119,10 +112,6 @@ module.exports = function speechInput(options={}) {
         'button.done': true,
         'button.record': false
       })
-    },
-    exit: function() {
-      statusLabel.innerText = ''
-      statusLabel.style.display = 'none'
     }
   })
 
@@ -158,7 +147,7 @@ module.exports = function speechInput(options={}) {
         'button.record': true,
       })
 
-      recordLabel.show('initializing', '#54dd9d')
+      recordLabel.initializing()
       try {
         const token = await getToken(apiHost + '/token')
         speech.recognizeStart(token)
@@ -227,7 +216,7 @@ module.exports = function speechInput(options={}) {
         'button.record': false
       })
 
-      recordLabel.show()
+      recordLabel.recording(mic.getMediaStream())
     }
 
     const exit = function() {

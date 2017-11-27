@@ -277,12 +277,9 @@ module.exports = function speechInput(options={}) {
 
   dom.classList.add('ui-speechinput')
   dom.innerHTML = `<div class="transcription-output" style="padding: 10px; overflow-y: scroll"></div>
-<div class="control-bar" style="display: flex; flex-direction: row; justify-content: space-between; align-items: center">
+<div class="control-bar" style="display: grid; grid-template-rows: 1fr; grid-template-columns: 1fr 3fr 1fr; justify-content: space-between; align-items: center">
   <button class="record" disabled style="color:red; height: 50px; width: 50px">●</button>
-  <div style="display: flex; justify-content: center">
-    <span class="record-status" style="padding-left: 8px; display: none"></span>
-    <div class="record-container recording"></div>
-  </div>
+  <div class="output" style="display: flex; justify-content: center"> </div>
   <div style="display: flex; flex-direction: column; justify-content: space-between">
     <button class="re-record" style="padding: 8px" disabled>redo</button>
     <button class="done" style="padding: 8px" disabled>done</button>
@@ -290,8 +287,7 @@ module.exports = function speechInput(options={}) {
 </div>`
 
   const output = dom.querySelector('.transcription-output')
-  const recordLabel = recLabel(dom.querySelector('.record-container'))
-  const statusLabel = dom.querySelector('.record-status')
+  const recordLabel = recLabel(dom.querySelector('.output'))
 
   let mic, mp3Encoder, storage
 
@@ -310,11 +306,8 @@ module.exports = function speechInput(options={}) {
 
   fsm.addState('idle', {
     enter: function(er) {
-      if (er) {
-        recordLabel.hide()
-        statusLabel.innerText = er
-        statusLabel.style.display = ''
-      }
+      if (er)
+        recordLabel.error(er)
 
       output.innerText = ''
       const button = select('button.record')
@@ -329,10 +322,6 @@ module.exports = function speechInput(options={}) {
         'button.done': true,
         'button.record': false
       })
-    },
-    exit: function() {
-      statusLabel.innerText = ''
-      statusLabel.style.display = 'none'
     }
   })
 
@@ -368,7 +357,7 @@ module.exports = function speechInput(options={}) {
         'button.record': true,
       })
 
-      recordLabel.show('initializing', '#54dd9d')
+      recordLabel.initializing()
       try {
         const token = await getToken(apiHost + '/token')
         speech.recognizeStart(token)
@@ -437,7 +426,7 @@ module.exports = function speechInput(options={}) {
         'button.record': false
       })
 
-      recordLabel.show()
+      recordLabel.recording(mic.getMediaStream())
     }
 
     const exit = function() {
@@ -559,7 +548,7 @@ module.exports = function speechInput(options={}) {
   return Object.freeze({ cancel, dom, pause, transcribe })
 }
 
-},{"./lib/finite-state-machine":5,"./lib/press":6,"./lib/stream-microphone":7,"./lib/sync-manager":8,"./lib/ui-recordinglabel":10,"./lib/watson-get-token":11,"./lib/watson-stt":13,"./lib/watson-stt-result-stream":12,"./lib/webaudio-mp3-stream":15,"./storage":29,"uuid/v4":27}],4:[function(require,module,exports){
+},{"./lib/finite-state-machine":5,"./lib/press":6,"./lib/stream-microphone":7,"./lib/sync-manager":8,"./lib/ui-recordinglabel":10,"./lib/watson-get-token":11,"./lib/watson-stt":13,"./lib/watson-stt-result-stream":12,"./lib/webaudio-mp3-stream":15,"./storage":32,"uuid/v4":30}],4:[function(require,module,exports){
 'use strict'
 
 module.exports = function convertCachedAudioToEntry (entry) {
@@ -671,7 +660,7 @@ module.exports = {
   }
 }
 
-},{"is-touch":19}],7:[function(require,module,exports){
+},{"is-touch":20}],7:[function(require,module,exports){
 'use strict'
 
 const getUserMedia = require('get-user-media-promise')
@@ -787,7 +776,7 @@ module.exports = function microphoneStream() {
   return Object.freeze({ getMediaStream, pipe, unpipe, start, stop, sampleRate: audioContext.sampleRate })
 }
 
-},{"ev-pubsub":16,"get-user-media-promise":17}],8:[function(require,module,exports){
+},{"ev-pubsub":17,"get-user-media-promise":18}],8:[function(require,module,exports){
 'use strict'
 
 const fsmFactory = require('../finite-state-machine')
@@ -877,7 +866,7 @@ module.exports = function syncManager (options={}) {
   fsm.setState('IDLE')
 }
 
-},{"../finite-state-machine":5,"./sync-worker":9,"lockable-storage":21,"webworkify":28}],9:[function(require,module,exports){
+},{"../finite-state-machine":5,"./sync-worker":9,"lockable-storage":22,"webworkify":31}],9:[function(require,module,exports){
 'use strict'
 
 const storage = require('../../storage')
@@ -994,8 +983,12 @@ module.exports = function(self) {
   })
 }
 
-},{"../../storage":29}],10:[function(require,module,exports){
+},{"../../storage":32}],10:[function(require,module,exports){
 'use strict'
+
+const clamp = require('clamp')
+const raf   = require('raf')
+
 
 module.exports = function recordingLabel(dom) {
   dom.innerHTML = `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
@@ -1022,7 +1015,19 @@ module.exports = function recordingLabel(dom) {
   </rect>
 </svg>
 <span style="padding-left:8px">recording</span>
+<canvas style="display:none"></canvas>
 `
+
+  const canvas = dom.querySelector('canvas')
+  const ctx = canvas.getContext('2d')
+  const fftSize = 256
+
+  // although the actual spectrum size is half the FFT size,
+  // the highest frequencies aren't really important here
+  const bandCount = Math.round(fftSize / 3)
+
+  let audioCtx, analyser, spectrum
+
 
   dom.style.color = 'rgba(255, 0, 0, 0.92)'
   dom.style.display = 'flex'
@@ -1031,21 +1036,94 @@ module.exports = function recordingLabel(dom) {
   dom.style.transitionDuration = '0.2s'
   dom.style.opacity = 0
 
-  const show = function(text='recording', color='rgba(255, 0, 0, 0.92)') {
-    dom.querySelector('span').innerText = text
+
+  const error = function(er) {
+    analyser = undefined
+    dom.querySelector('svg').style.display = 'none'
+    canvas.style.display = 'none'
+    dom.querySelector('span').style.display = ''
+    dom.querySelector('span').innerText = er
     dom.style.display = 'flex'
     dom.style.opacity = 1
   }
 
-  const hide = function() {
-    dom.style.opacity = 0
-    dom.style.display = 'none'
+
+  const initializing = function() {
+    analyser = undefined
+    canvas.style.display = 'none'
+    dom.querySelector('svg').style.display = ''
+    dom.querySelector('span').style.display = ''
+    dom.querySelector('span').innerText = 'initializing'
+    dom.style.display = 'flex'
+    dom.style.opacity = 1
   }
 
-  return Object.freeze({ dom, show, hide })
+
+  const hide = function() {
+    analyser = undefined
+    dom.style.opacity = 0
+    //dom.style.display = 'none'
+  }
+
+
+  const recording = function(stream) {
+    dom.querySelector('svg').style.display = 'none'
+    dom.querySelector('span').style.display = 'none'
+
+    canvas.style.width = dom.clientWidth + 'px'
+    canvas.style.height = dom.parentNode.clientHeight / 2 + 'px'
+    canvas.style.display = ''
+
+    _setMediaStream(stream)
+  }
+
+
+  const _setMediaStream = function(stream) {
+    if(!audioCtx)
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+
+    const source = audioCtx.createMediaStreamSource(stream)
+    analyser = audioCtx.createAnalyser()
+
+    // set node properties and connect
+    analyser.smoothingTimeConstant = 0.2
+    analyser.fftSize = fftSize
+
+    spectrum = new Uint8Array(analyser.frequencyBinCount)
+    source.connect(analyser)
+  }
+
+
+  // called each audio frame, manages rendering of visualization
+  const _visualize = function() {
+    if(analyser) {
+      analyser.getByteFrequencyData(spectrum)
+      _draw()
+    }
+    raf(_visualize)
+  }
+
+
+  const _draw = function() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.fillStyle = 'rgba(230,0,60,0.9)'
+    let barWidth = canvas.width / bandCount
+    //let fade = true
+
+    for (let i = 0; i < bandCount; i++) {
+      //let brightness = fade ? clamp(Math.floor(spectrum[i] / 1.5), 25, 99) : 99
+      let barHeight = canvas.height * (spectrum[i] / 255)
+      ctx.fillRect(i * barWidth, (canvas.height - barHeight) / 2, barWidth, barHeight)
+    }
+  }
+
+  _visualize()
+
+
+  return Object.freeze({ dom, error, initializing, hide, recording })
 }
 
-},{}],11:[function(require,module,exports){
+},{"clamp":16,"raf":26}],11:[function(require,module,exports){
 'use strict'
 
 const FIFTY_MINUTES_IN_MILLISECONDS = 50 * 60 * 1000
@@ -1146,7 +1224,7 @@ module.exports = function watsonSTTResultStream(options={}) {
   return Object.freeze({ clear, subscribe, unsubscribe, write, pipe, unpipe, markBoundary })
 }
 
-},{"ev-pubsub":16}],13:[function(require,module,exports){
+},{"ev-pubsub":17}],13:[function(require,module,exports){
 'use strict'
 
 const fsmFactory = require('./finite-state-machine')
@@ -1398,7 +1476,7 @@ module.exports = function watsonSpeechToText(options={}) {
   return Object.freeze({ close, pipe, recognizeStart, recognizeStop, unpipe, subscribe, unsubscribe, write })
 }
 
-},{"./finite-state-machine":5,"ev-pubsub":16,"lodash.pick":22}],14:[function(require,module,exports){
+},{"./finite-state-machine":5,"ev-pubsub":17,"lodash.pick":23}],14:[function(require,module,exports){
 'use strict'
 
 //const lamejs = require('lamejs')
@@ -1518,7 +1596,16 @@ module.exports = function webAudioMp3Stream(options={}) {
   return Object.freeze({ pipe, unpipe, write })
 }
 
-},{"./encoder-worker":14,"ev-pubsub":16,"webworkify":28}],16:[function(require,module,exports){
+},{"./encoder-worker":14,"ev-pubsub":17,"webworkify":31}],16:[function(require,module,exports){
+module.exports = clamp
+
+function clamp(value, min, max) {
+  return min < max
+    ? (value < min ? min : value > max ? max : value)
+    : (value < max ? max : value > min ? min : value)
+}
+
+},{}],17:[function(require,module,exports){
 'use strict'
 
 const nextTick    = require('next-tick-2')
@@ -1600,7 +1687,7 @@ module.exports = function pubsub() {
   return Object.freeze({ publish, subscribe, unsubscribe, once })
 }
 
-},{"next-tick-2":23,"remove-array-items":24}],17:[function(require,module,exports){
+},{"next-tick-2":24,"remove-array-items":27}],18:[function(require,module,exports){
 // loosely based on example code at https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
 (function (root) {
   'use strict';
@@ -1711,7 +1798,7 @@ module.exports = function pubsub() {
   }
 }(this));
 
-},{}],18:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 (function (process){
 // Coding standard for this project defined @ https://github.com/MatthewSH/standards/blob/master/JavaScript.md
 'use strict';
@@ -1719,7 +1806,7 @@ module.exports = function pubsub() {
 exports = module.exports = !!(typeof process !== 'undefined' && process.versions && process.versions.node);
 
 }).call(this,require('_process'))
-},{"_process":2}],19:[function(require,module,exports){
+},{"_process":2}],20:[function(require,module,exports){
 (function (global){
 'use strict'
 var isNode = require('is-node')
@@ -1736,7 +1823,7 @@ module.exports = isNode
     false
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"is-node":18}],20:[function(require,module,exports){
+},{"is-node":19}],21:[function(require,module,exports){
 (function (global){
 /*!
     localForage -- Offline Storage, Improved
@@ -4166,7 +4253,7 @@ module.exports = localforage_js;
 },{"3":3}]},{},[4])(4)
 });
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 /**
 Copyright (c) 2012, Benjamin Dumke-von der Ehe
 
@@ -4306,7 +4393,7 @@ function lockImpl(key, callback, maxDuration, synchronous) {
     }
 }
 
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 (function (global){
 /**
  * lodash (Custom Build) <https://lodash.com/>
@@ -4813,7 +4900,7 @@ var pick = baseRest(function(object, props) {
 module.exports = pick;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 'use strict'
 
 var ensureCallable = function (fn) {
@@ -4877,7 +4964,126 @@ module.exports = (function () {
 	}
 }())
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
+(function (process){
+// Generated by CoffeeScript 1.12.2
+(function() {
+  var getNanoSeconds, hrtime, loadTime, moduleLoadTime, nodeLoadTime, upTime;
+
+  if ((typeof performance !== "undefined" && performance !== null) && performance.now) {
+    module.exports = function() {
+      return performance.now();
+    };
+  } else if ((typeof process !== "undefined" && process !== null) && process.hrtime) {
+    module.exports = function() {
+      return (getNanoSeconds() - nodeLoadTime) / 1e6;
+    };
+    hrtime = process.hrtime;
+    getNanoSeconds = function() {
+      var hr;
+      hr = hrtime();
+      return hr[0] * 1e9 + hr[1];
+    };
+    moduleLoadTime = getNanoSeconds();
+    upTime = process.uptime() * 1e9;
+    nodeLoadTime = moduleLoadTime - upTime;
+  } else if (Date.now) {
+    module.exports = function() {
+      return Date.now() - loadTime;
+    };
+    loadTime = Date.now();
+  } else {
+    module.exports = function() {
+      return new Date().getTime() - loadTime;
+    };
+    loadTime = new Date().getTime();
+  }
+
+}).call(this);
+
+
+
+}).call(this,require('_process'))
+},{"_process":2}],26:[function(require,module,exports){
+(function (global){
+var now = require('performance-now')
+  , root = typeof window === 'undefined' ? global : window
+  , vendors = ['moz', 'webkit']
+  , suffix = 'AnimationFrame'
+  , raf = root['request' + suffix]
+  , caf = root['cancel' + suffix] || root['cancelRequest' + suffix]
+
+for(var i = 0; !raf && i < vendors.length; i++) {
+  raf = root[vendors[i] + 'Request' + suffix]
+  caf = root[vendors[i] + 'Cancel' + suffix]
+      || root[vendors[i] + 'CancelRequest' + suffix]
+}
+
+// Some versions of FF have rAF but not cAF
+if(!raf || !caf) {
+  var last = 0
+    , id = 0
+    , queue = []
+    , frameDuration = 1000 / 60
+
+  raf = function(callback) {
+    if(queue.length === 0) {
+      var _now = now()
+        , next = Math.max(0, frameDuration - (_now - last))
+      last = next + _now
+      setTimeout(function() {
+        var cp = queue.slice(0)
+        // Clear queue here to prevent
+        // callbacks from appending listeners
+        // to the current frame's queue
+        queue.length = 0
+        for(var i = 0; i < cp.length; i++) {
+          if(!cp[i].cancelled) {
+            try{
+              cp[i].callback(last)
+            } catch(e) {
+              setTimeout(function() { throw e }, 0)
+            }
+          }
+        }
+      }, Math.round(next))
+    }
+    queue.push({
+      handle: ++id,
+      callback: callback,
+      cancelled: false
+    })
+    return id
+  }
+
+  caf = function(handle) {
+    for(var i = 0; i < queue.length; i++) {
+      if(queue[i].handle === handle) {
+        queue[i].cancelled = true
+      }
+    }
+  }
+}
+
+module.exports = function(fn) {
+  // Wrap in a new function to prevent
+  // `cancel` potentially being assigned
+  // to the native rAF function
+  return raf.call(root, fn)
+}
+module.exports.cancel = function() {
+  caf.apply(root, arguments)
+}
+module.exports.polyfill = function(object) {
+  if (!object) {
+    object = root;
+  }
+  object.requestAnimationFrame = raf
+  object.cancelAnimationFrame = caf
+}
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"performance-now":25}],27:[function(require,module,exports){
 'use strict'
 
 /**
@@ -4907,7 +5113,7 @@ module.exports = function removeItems(arr, startIdx, removeCount)
   arr.length = len
 }
 
-},{}],25:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 /**
  * Convert array of 16 byte values to UUID string format of the form:
  * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
@@ -4932,7 +5138,7 @@ function bytesToUuid(buf, offset) {
 
 module.exports = bytesToUuid;
 
-},{}],26:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 (function (global){
 // Unique ID creation requires a high quality random # generator.  In the
 // browser this is a little complicated due to unknown quality of Math.random()
@@ -4969,7 +5175,7 @@ if (!rng) {
 module.exports = rng;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],27:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 var rng = require('./lib/rng');
 var bytesToUuid = require('./lib/bytesToUuid');
 
@@ -5000,7 +5206,7 @@ function v4(options, buf, offset) {
 
 module.exports = v4;
 
-},{"./lib/bytesToUuid":25,"./lib/rng":26}],28:[function(require,module,exports){
+},{"./lib/bytesToUuid":28,"./lib/rng":29}],31:[function(require,module,exports){
 var bundleFn = arguments[3];
 var sources = arguments[4];
 var cache = arguments[5];
@@ -5082,7 +5288,7 @@ module.exports = function (fn, options) {
     return worker;
 };
 
-},{}],29:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 'use strict'
 
 const localforage = require('localforage')
@@ -5247,4 +5453,4 @@ module.exports = async function audioStorage(options={}) {
     write, pipe, unpipe })
 }
 
-},{"./lib/convert-cached-audio-to-entry":4,"ev-pubsub":16,"localforage":20}]},{},[1]);
+},{"./lib/convert-cached-audio-to-entry":4,"ev-pubsub":17,"localforage":21}]},{},[1]);
