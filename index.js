@@ -77,7 +77,7 @@ module.exports = function speechInput(options={}) {
 </div>`
 
   const output = dom.querySelector('.transcription-output')
-  const recordLabel = recLabel(dom.querySelector('.output'))
+  let recordLabel // = recLabel(dom.querySelector('.output'))
 
   let mic, mp3Encoder, storage
 
@@ -87,8 +87,16 @@ module.exports = function speechInput(options={}) {
   }
   const speech = watsonSTT({ interim_results: true, smart_formatting: true })
 
+  // to circumvent audio autoplay limitations in mobile browsers, we define a
+  // temporary click handler, which plays a silent audio file upon first gesture.
+  // This enables the audio element to have it's src changed at will and play
+  // without any further user gestures.
+  //
+  // These limitations also affect recording audio, so we set up the audio
+  // context and other things needed to record on mobile.
   const recordButton = dom.querySelector('button.record')
   press.once(recordButton, function(ev) {
+    recordLabel = recLabel(dom.querySelector('.output'))
     mic = micStream()
     mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
   })
