@@ -56,6 +56,15 @@ module.exports = async function audioStorage(options={}) {
   }
 
 
+  const editMetadata = async function(audioId, meta) {
+    const recording = await getRecording(audioId)
+    if(recording) {
+      recording.meta.custom = meta
+      await localforage.setItem(`${objectPrefix}-${recording.uuid}`, recording)
+    }
+  }
+
+
   const finalizeRecording = async function() {
     if(!currentRecording)
       return
@@ -157,7 +166,7 @@ module.exports = async function audioStorage(options={}) {
   //await localforage.clear()
 
   return Object.freeze({ clearSegments, createRecording, createSegment,
-    finalizeRecording, getAllRecordings, getFinalizedRecordings, getRecording,
-    listRecordings, setSegmentTranscription, markUploaded, removeRecording,
-    write, pipe, unpipe })
+    editMetadata, finalizeRecording, getAllRecordings, getFinalizedRecordings,
+    getRecording, listRecordings, setSegmentTranscription, markUploaded,
+    removeRecording, write, pipe, unpipe })
 }
