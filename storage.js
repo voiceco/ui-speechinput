@@ -13,8 +13,9 @@ module.exports = async function audioStorage(options={}) {
 
 
   // @param uuid  v4 uuid of recording
+  // @param type  audio/mp3 | audio/ogg
   // @param meta  optional object containing custom metadata
-  const createRecording = async function(uuid, meta={}) {
+  const createRecording = async function(uuid, type, meta={}) {
     currentRecording = await getRecording(uuid)
 
     if(currentRecording)
@@ -26,7 +27,7 @@ module.exports = async function audioStorage(options={}) {
         created: Date.now(),
         finalized: false,
         syncedToServer: false,
-        type: 'audio/mp3',
+        type,
         custom: meta
       },
       segments: [ ]

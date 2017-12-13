@@ -3,8 +3,7 @@
 const audioStorage = require('./storage')
 const fsmFactory   = require('./lib/finite-state-machine')
 const getToken     = require('./lib/watson-get-token')
-const micStream    = require('./lib/stream-microphone')
-const mp3Stream    = require('./lib/webaudio-mp3-stream')
+const micStream    = require('./lib/stream-microphone-opus')
 const press        = require('./lib/press')
 const recLabel     = require('./lib/ui-recordinglabel')
 const resultStream = require('./lib/watson-stt-result-stream')
@@ -36,11 +35,13 @@ finite state machine for speechinput widget. initial state: IDLE
         └-------------------------┘
 */
 
+
 function appendItem() {
   const item = document.createElement('p')
   item.classList.add('me-text')
   return item
 }
+
 
 module.exports = function speechInput(options={}) {
   const { key, secret } = options
@@ -51,7 +52,9 @@ module.exports = function speechInput(options={}) {
   if(!secret)
     throw new Error('You must specify an API secret')
 
-  const apiHost = 'https://audio.voiceco.ai'
+  //const apiHost = 'https://audio.voiceco.ai'
+  const apiHost = 'https://localhost:3003'
+
   const objectPrefix = 'voiceco-' + key
   const sync = syncManager({ objectPrefix, apiHost, apiId: key, apiSecret: secret })
   const fsm = fsmFactory()
@@ -83,7 +86,7 @@ module.exports = function speechInput(options={}) {
   const recordLabel = recLabel(dom.querySelector('.record-container'))
   const statusLabel = dom.querySelector('.record-status')
 
-  let mic, mp3Encoder, storage
+  let mic, storage
 
   const transcriptionPromise = {
     resolve: undefined,
@@ -94,7 +97,6 @@ module.exports = function speechInput(options={}) {
   const recordButton = dom.querySelector('button.record')
   press.once(recordButton, function(ev) {
     mic = micStream()
-    mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
   })
 
 
@@ -169,6 +171,7 @@ module.exports = function speechInput(options={}) {
     }
   })
 
+
   const recordingState = function() {
     let sttResultStream, currentItem
 
@@ -202,10 +205,9 @@ module.exports = function speechInput(options={}) {
       await mic.start()
 
       storage.createSegment()
-      mp3Encoder.pipe(storage)
+      mic.pipe(storage)
 
       mic
-        .pipe(mp3Encoder)
         .pipe(speech)
         .pipe(sttResultStream)
 
@@ -238,7 +240,6 @@ module.exports = function speechInput(options={}) {
       recordLabel.hide()
       speech.recognizeStop()
       mic.unpipe()
-      mp3Encoder.unpipe()
       mic.stop()
       speech.unpipe()
       currentItem = undefined
@@ -309,6 +310,7 @@ module.exports = function speechInput(options={}) {
       fsm.setState('idle')
   })
 
+
   const cancel = function() {
     pause()
     dom.style.opacity = 0
@@ -316,9 +318,11 @@ module.exports = function speechInput(options={}) {
     transcriptionPromise.rej = undefined
   }
 
+
   const pause = function() {
     fsm.setState('paused')
   }
+
 
   const transcribe = async function(userMeta={}) {
     if(!storage)
@@ -330,7 +334,7 @@ module.exports = function speechInput(options={}) {
       throw new Error('cannot transcribe more than 1 audio at a time')
 
     const uuid = uuidV4()
-    storage.createRecording(uuid, userMeta)
+    storage.createRecording(uuid, 'audio/ogg', userMeta)
     fsm.setState('idle')
     dom.style.opacity = 1
 
@@ -345,6 +349,7 @@ module.exports = function speechInput(options={}) {
     transcriptionPromise.rej = undefined
     return { uuid, text: text.trim() }
   }
+
 
   return Object.freeze({ cancel, dom, pause, transcribe })
 }

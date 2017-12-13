@@ -213,8 +213,7 @@ process.umask = function() { return 0; };
 const audioStorage = require('./storage')
 const fsmFactory   = require('./lib/finite-state-machine')
 const getToken     = require('./lib/watson-get-token')
-const micStream    = require('./lib/stream-microphone')
-const mp3Stream    = require('./lib/webaudio-mp3-stream')
+const micStream    = require('./lib/stream-microphone-opus')
 const press        = require('./lib/press')
 const recLabel     = require('./lib/ui-recordinglabel')
 const resultStream = require('./lib/watson-stt-result-stream')
@@ -246,11 +245,13 @@ finite state machine for speechinput widget. initial state: IDLE
         └-------------------------┘
 */
 
+
 function appendItem() {
   const item = document.createElement('p')
   item.classList.add('me-text')
   return item
 }
+
 
 module.exports = function speechInput(options={}) {
   const { key, secret } = options
@@ -261,7 +262,9 @@ module.exports = function speechInput(options={}) {
   if(!secret)
     throw new Error('You must specify an API secret')
 
-  const apiHost = 'https://audio.voiceco.ai'
+  //const apiHost = 'https://audio.voiceco.ai'
+  const apiHost = 'https://localhost:3003'
+
   const objectPrefix = 'voiceco-' + key
   const sync = syncManager({ objectPrefix, apiHost, apiId: key, apiSecret: secret })
   const fsm = fsmFactory()
@@ -277,9 +280,12 @@ module.exports = function speechInput(options={}) {
 
   dom.classList.add('ui-speechinput')
   dom.innerHTML = `<div class="transcription-output" style="padding: 10px; overflow-y: scroll"></div>
-<div class="control-bar" style="display: grid; grid-template-rows: 1fr; grid-template-columns: 1fr 3fr 1fr; justify-content: space-between; align-items: center">
+<div class="control-bar" style="display: flex; flex-direction: row; justify-content: space-between; align-items: center">
   <button class="record" disabled style="color:red; height: 50px; width: 50px">●</button>
-  <div class="output" style="display: flex; justify-content: center"> </div>
+  <div style="display: flex; justify-content: center">
+    <span class="record-status" style="padding-left: 8px; display: none"></span>
+    <div class="record-container recording"></div>
+  </div>
   <div style="display: flex; flex-direction: column; justify-content: space-between">
     <button class="re-record" style="padding: 8px" disabled>redo</button>
     <button class="done" style="padding: 8px" disabled>done</button>
@@ -287,9 +293,10 @@ module.exports = function speechInput(options={}) {
 </div>`
 
   const output = dom.querySelector('.transcription-output')
-  const recordLabel = recLabel(dom.querySelector('.output'))
+  const recordLabel = recLabel(dom.querySelector('.record-container'))
+  const statusLabel = dom.querySelector('.record-status')
 
-  let mic, mp3Encoder, storage
+  let mic, storage
 
   const transcriptionPromise = {
     resolve: undefined,
@@ -300,14 +307,16 @@ module.exports = function speechInput(options={}) {
   const recordButton = dom.querySelector('button.record')
   press.once(recordButton, function(ev) {
     mic = micStream()
-    mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
   })
 
 
   fsm.addState('idle', {
     enter: function(er) {
-      if (er)
-        recordLabel.error(er)
+      if (er) {
+        recordLabel.hide()
+        statusLabel.innerText = er
+        statusLabel.style.display = ''
+      }
 
       output.innerText = ''
       const button = select('button.record')
@@ -322,6 +331,10 @@ module.exports = function speechInput(options={}) {
         'button.done': true,
         'button.record': false
       })
+    },
+    exit: function() {
+      statusLabel.innerText = ''
+      statusLabel.style.display = 'none'
     }
   })
 
@@ -357,7 +370,7 @@ module.exports = function speechInput(options={}) {
         'button.record': true,
       })
 
-      recordLabel.initializing()
+      recordLabel.show('initializing', '#54dd9d')
       try {
         const token = await getToken(apiHost + '/token')
         speech.recognizeStart(token)
@@ -367,6 +380,7 @@ module.exports = function speechInput(options={}) {
       }
     }
   })
+
 
   const recordingState = function() {
     let sttResultStream, currentItem
@@ -401,10 +415,9 @@ module.exports = function speechInput(options={}) {
       await mic.start()
 
       storage.createSegment()
-      mp3Encoder.pipe(storage)
+      mic.pipe(storage)
 
       mic
-        .pipe(mp3Encoder)
         .pipe(speech)
         .pipe(sttResultStream)
 
@@ -426,7 +439,7 @@ module.exports = function speechInput(options={}) {
         'button.record': false
       })
 
-      recordLabel.recording(mic.getMediaStream())
+      recordLabel.show()
     }
 
     const exit = function() {
@@ -437,7 +450,6 @@ module.exports = function speechInput(options={}) {
       recordLabel.hide()
       speech.recognizeStop()
       mic.unpipe()
-      mp3Encoder.unpipe()
       mic.stop()
       speech.unpipe()
       currentItem = undefined
@@ -508,6 +520,7 @@ module.exports = function speechInput(options={}) {
       fsm.setState('idle')
   })
 
+
   const cancel = function() {
     pause()
     dom.style.opacity = 0
@@ -515,9 +528,11 @@ module.exports = function speechInput(options={}) {
     transcriptionPromise.rej = undefined
   }
 
+
   const pause = function() {
     fsm.setState('paused')
   }
+
 
   const transcribe = async function(userMeta={}) {
     if(!storage)
@@ -529,7 +544,7 @@ module.exports = function speechInput(options={}) {
       throw new Error('cannot transcribe more than 1 audio at a time')
 
     const uuid = uuidV4()
-    storage.createRecording(uuid, userMeta)
+    storage.createRecording(uuid, 'audio/ogg', userMeta)
     fsm.setState('idle')
     dom.style.opacity = 1
 
@@ -545,10 +560,11 @@ module.exports = function speechInput(options={}) {
     return { uuid, text: text.trim() }
   }
 
+
   return Object.freeze({ cancel, dom, pause, transcribe })
 }
 
-},{"./lib/finite-state-machine":5,"./lib/press":6,"./lib/stream-microphone":7,"./lib/sync-manager":8,"./lib/ui-recordinglabel":10,"./lib/watson-get-token":11,"./lib/watson-stt":13,"./lib/watson-stt-result-stream":12,"./lib/webaudio-mp3-stream":15,"./storage":32,"uuid/v4":30}],4:[function(require,module,exports){
+},{"./lib/finite-state-machine":5,"./lib/press":6,"./lib/stream-microphone-opus":7,"./lib/sync-manager":8,"./lib/ui-recordinglabel":10,"./lib/watson-get-token":11,"./lib/watson-stt":13,"./lib/watson-stt-result-stream":12,"./storage":27,"uuid/v4":25}],4:[function(require,module,exports){
 'use strict'
 
 module.exports = function convertCachedAudioToEntry (entry) {
@@ -660,11 +676,11 @@ module.exports = {
   }
 }
 
-},{"is-touch":20}],7:[function(require,module,exports){
+},{"is-touch":16}],7:[function(require,module,exports){
 'use strict'
 
-const getUserMedia = require('get-user-media-promise')
-const pubsub       = require('ev-pubsub')
+const Recorder = require('opus-recorder')
+const pubsub   = require('ev-pubsub')
 
 
 // GOTCHA: this object should be constructed as the result of a user gesture.
@@ -675,38 +691,8 @@ const pubsub       = require('ev-pubsub')
 module.exports = function microphoneStream() {
   const { publish, subscribe, unsubscribe } = pubsub()
 
-  let mediaStream, source
-
+  let encoder
   const audioContext = new (window.AudioContext || window.webkitAudioContext)
-
-  // better to let the browser determine this automatically:
-  // https://developer.mozilla.org/en-US/docs/Web/API/AudioContext/createScriptProcessor
-
-  // GOTCHA: Safari webkitAudioContext (safari) requires bufferSize to be set
-  // Possible values: null, 256, 512, 1024, 2048, 4096, 8192, 16384
-  const bufferSize = (typeof window.AudioContext === 'undefined' ? 4096 : undefined)
-
-  const inputChannels = 1
-
-  // GOTCHA: chrome won't give any audio without an output channel
-  const outputChannels = 1
-
-  // GOTCHA: chrome needs the destination set for the script processor or no data will flow
-  const scriptNode = audioContext.createScriptProcessor(bufferSize, inputChannels, outputChannels)
-
-  // https://developer.mozilla.org/en-US/docs/Web/API/ScriptProcessorNode
-  scriptNode.onaudioprocess = function _recorderProcess(e) {
-    // GOTCHA: onaudioprocess can be called at least once after we've stopped.
-    //if (!recording) return
-
-    const left = e.inputBuffer.getChannelData(0)
-    publish('data', left)
-  }
-
-
-  const getMediaStream = function() {
-    return mediaStream
-  }
 
 
   const pipe = function(destination) {
@@ -721,62 +707,53 @@ module.exports = function microphoneStream() {
   // you don't need to call this from a user gesture; it will work fine in mobile contexts
   // as long as this object was constructed from a user gesture
   const start = async function() {
-    if(mediaStream)
+    if(encoder)
       return
 
-    const opts = {
-      audio: {
-        mandatory: {
-          echoCancellation: false,
-          googEchoCancellation: false,
-          googAutoGainControl: false,
-          googAutoGainControl2: false,
-          googNoiseSuppression: false,
-          googHighpassFilter: false,
-          googTypingNoiseDetection: false
-        },
-        optional: []
-      },
-      video: false
-    }
-    //const opts = { audio,: true, video: false }
+    // set up a web worker with logic to encode audio to opus
+    encoder = new Recorder({
+      //encoderBitRate: 2560000,
+      encoderApplication: 2048, // voice
+      encoderPath: '/js/encoderWorker.min.js',
 
-    mediaStream = await getUserMedia(opts)
-    source = audioContext.createMediaStreamSource(mediaStream)
-    source.connect(scriptNode)
-    scriptNode.connect(audioContext.destination)
+      //encoderSampleRate: 48000,
+
+      monitorGain: 0,
+      numberOfChannels: 1,
+      maxBuffersPerPage: 10, // defaults to 40
+      originalSampleRateOverride: 16000,
+      streamPages: true
+    })
+
+
+    encoder.addEventListener('dataAvailable', function (ev) {
+      // ev.detail is a Uint8Array
+      //const dataBlob = new Blob( [ev.detail], { type: 'audio/ogg' })
+      publish('data', ev.detail.buffer)
+    })
+
+    // request the user for permission to access the the audio stream and raise
+    // streamReady or streamError. Returns a Promise which resolves the audio
+    // stream when it is ready.
+    await encoder.initStream()
+
+    // initalize the worker and begin capturing audio if the audio stream is ready.
+    // Will raise the start event when started.
+    encoder.start()
   }
 
   const stop = function() {
-    if(!mediaStream || audioContext.state === 'closed')
+    if(!encoder)
       return
 
-    try {
-      // close the audio recording track and hides the recording indicator
-      mediaStream.getAudioTracks()[0].stop()
-    } catch (ex) {
-      // GOTCHA: this fails in some older versions of chrome. Nothing we can do about it.
-    }
-
-    scriptNode.disconnect()
-    if(source)
-      source.disconnect()
-
-    // don't close the audio context, we'll need this when recording multiple times in a session
-    /*
-    try {
-      audioContext.close()  // returns a promise
-    } catch (ex) {
-      // GOTCHA: this can also fail in older versions of chrome
-    }
-    */
-    mediaStream = undefined
+    encoder.stop()
+    encoder = undefined
   }
 
-  return Object.freeze({ getMediaStream, pipe, unpipe, start, stop, sampleRate: audioContext.sampleRate })
+  return Object.freeze({ pipe, unpipe, start, stop, sampleRate: audioContext.sampleRate })
 }
 
-},{"ev-pubsub":17,"get-user-media-promise":18}],8:[function(require,module,exports){
+},{"ev-pubsub":14,"opus-recorder":21}],8:[function(require,module,exports){
 'use strict'
 
 const fsmFactory = require('../finite-state-machine')
@@ -793,9 +770,11 @@ initial state: IDLE
 └----┘     └-------┘
 */
 
+
 function uuid() {
   return '' + Math.floor(Number.MAX_SAFE_INTEGER * Math.random())
 }
+
 
 module.exports = function syncManager (options={}) {
   const { objectPrefix, apiHost, apiId, apiSecret } = options
@@ -866,7 +845,7 @@ module.exports = function syncManager (options={}) {
   fsm.setState('IDLE')
 }
 
-},{"../finite-state-machine":5,"./sync-worker":9,"lockable-storage":22,"webworkify":31}],9:[function(require,module,exports){
+},{"../finite-state-machine":5,"./sync-worker":9,"lockable-storage":18,"webworkify":26}],9:[function(require,module,exports){
 'use strict'
 
 const storage = require('../../storage')
@@ -890,7 +869,7 @@ module.exports = function(self) {
         result.segments.push(segment.transcription)
       })
 
-      request.open('PUT', apiHost + '/audio/' + audioId + '?encoding=mp3&apiId=' + apiId + '&apiSecret=' + apiSecret + '&meta='+JSON.stringify(result), true)
+      request.open('PUT', apiHost + '/audio/' + audioId + '?encoding=opus&apiId=' + apiId + '&apiSecret=' + apiSecret + '&meta='+JSON.stringify(result), true)
 
       let progress = 0
       request.upload.onprogress = function(e) {
@@ -983,12 +962,8 @@ module.exports = function(self) {
   })
 }
 
-},{"../../storage":32}],10:[function(require,module,exports){
+},{"../../storage":27}],10:[function(require,module,exports){
 'use strict'
-
-const clamp = require('clamp')
-const raf   = require('raf')
-
 
 module.exports = function recordingLabel(dom) {
   dom.innerHTML = `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
@@ -1015,19 +990,7 @@ module.exports = function recordingLabel(dom) {
   </rect>
 </svg>
 <span style="padding-left:8px">recording</span>
-<canvas style="display:none"></canvas>
 `
-
-  const canvas = dom.querySelector('canvas')
-  const ctx = canvas.getContext('2d')
-  const fftSize = 256
-
-  // although the actual spectrum size is half the FFT size,
-  // the highest frequencies aren't really important here
-  const bandCount = Math.round(fftSize / 3)
-
-  let audioCtx, analyser, spectrum
-
 
   dom.style.color = 'rgba(255, 0, 0, 0.92)'
   dom.style.display = 'flex'
@@ -1036,94 +999,21 @@ module.exports = function recordingLabel(dom) {
   dom.style.transitionDuration = '0.2s'
   dom.style.opacity = 0
 
-
-  const error = function(er) {
-    analyser = undefined
-    dom.querySelector('svg').style.display = 'none'
-    canvas.style.display = 'none'
-    dom.querySelector('span').style.display = ''
-    dom.querySelector('span').innerText = er
+  const show = function(text='recording', color='rgba(255, 0, 0, 0.92)') {
+    dom.querySelector('span').innerText = text
     dom.style.display = 'flex'
     dom.style.opacity = 1
   }
-
-
-  const initializing = function() {
-    analyser = undefined
-    canvas.style.display = 'none'
-    dom.querySelector('svg').style.display = ''
-    dom.querySelector('span').style.display = ''
-    dom.querySelector('span').innerText = 'initializing'
-    dom.style.display = 'flex'
-    dom.style.opacity = 1
-  }
-
 
   const hide = function() {
-    analyser = undefined
     dom.style.opacity = 0
-    //dom.style.display = 'none'
+    dom.style.display = 'none'
   }
 
-
-  const recording = function(stream) {
-    dom.querySelector('svg').style.display = 'none'
-    dom.querySelector('span').style.display = 'none'
-
-    canvas.style.width = dom.clientWidth + 'px'
-    canvas.style.height = dom.parentNode.clientHeight / 2 + 'px'
-    canvas.style.display = ''
-
-    _setMediaStream(stream)
-  }
-
-
-  const _setMediaStream = function(stream) {
-    if(!audioCtx)
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-
-    const source = audioCtx.createMediaStreamSource(stream)
-    analyser = audioCtx.createAnalyser()
-
-    // set node properties and connect
-    analyser.smoothingTimeConstant = 0.2
-    analyser.fftSize = fftSize
-
-    spectrum = new Uint8Array(analyser.frequencyBinCount)
-    source.connect(analyser)
-  }
-
-
-  // called each audio frame, manages rendering of visualization
-  const _visualize = function() {
-    if(analyser) {
-      analyser.getByteFrequencyData(spectrum)
-      _draw()
-    }
-    raf(_visualize)
-  }
-
-
-  const _draw = function() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.fillStyle = 'rgba(230,0,60,0.9)'
-    let barWidth = canvas.width / bandCount
-    //let fade = true
-
-    for (let i = 0; i < bandCount; i++) {
-      //let brightness = fade ? clamp(Math.floor(spectrum[i] / 1.5), 25, 99) : 99
-      let barHeight = canvas.height * (spectrum[i] / 255)
-      ctx.fillRect(i * barWidth, (canvas.height - barHeight) / 2, barWidth, barHeight)
-    }
-  }
-
-  _visualize()
-
-
-  return Object.freeze({ dom, error, initializing, hide, recording })
+  return Object.freeze({ dom, show, hide })
 }
 
-},{"clamp":16,"raf":26}],11:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 'use strict'
 
 const FIFTY_MINUTES_IN_MILLISECONDS = 50 * 60 * 1000
@@ -1224,7 +1114,7 @@ module.exports = function watsonSTTResultStream(options={}) {
   return Object.freeze({ clear, subscribe, unsubscribe, write, pipe, unpipe, markBoundary })
 }
 
-},{"ev-pubsub":17}],13:[function(require,module,exports){
+},{"ev-pubsub":14}],13:[function(require,module,exports){
 'use strict'
 
 const fsmFactory = require('./finite-state-machine')
@@ -1353,7 +1243,7 @@ module.exports = function watsonSpeechToText(options={}) {
 
         const openingMessage = pick(options, OPENING_MESSAGE_PARAMS_ALLOWED)
         openingMessage.action = 'start'
-        openingMessage['content-type'] = 'audio/mp3'
+        openingMessage['content-type'] = 'audio/ogg;codecs=opus'
         console.log('sending watson header message', openingMessage)
         _send(JSON.stringify(openingMessage))
       } catch(er) {
@@ -1438,6 +1328,7 @@ module.exports = function watsonSpeechToText(options={}) {
 
   const _initSocket = async function(token) {
     return new Promise(function(resolve, reject) {
+      console.log('token:', token)
       const queryString = stringify({ model: 'en-US_BroadbandModel', 'watson-token': token })
       const wsURI = `wss://stream.watsonplatform.net/speech-to-text/api/v1/recognize?${queryString}`
       try {
@@ -1476,136 +1367,7 @@ module.exports = function watsonSpeechToText(options={}) {
   return Object.freeze({ close, pipe, recognizeStart, recognizeStop, unpipe, subscribe, unsubscribe, write })
 }
 
-},{"./finite-state-machine":5,"ev-pubsub":17,"lodash.pick":23}],14:[function(require,module,exports){
-'use strict'
-
-//const lamejs = require('lamejs')
-
-
-// downsample audio to mp3 and post back
-module.exports = function(self) {
-  let mp3Encoder, maxSamples = 1152, samplesMono, config, dataBuffer
-
-  const clearBuffer = function() {
-    dataBuffer = []
-  }
-
-  const appendToBuffer = function (mp3Buf) {
-    const buf = new Int8Array(mp3Buf)
-    //dataBuffer.push(buf)
-    self.postMessage({ cmd: 'data', buf: buf.buffer }, [ buf.buffer ])
-  }
-
-  const init = function (prefConfig) {
-    config = prefConfig || { debug: true }
-    config.sampleRate = config.sampleRate || 44100
-
-    importScripts(config.lameUrl)
-    mp3Encoder = new lamejs.Mp3Encoder(1, config.sampleRate, config.bitRate || 123)
-    clearBuffer()
-  }
-
-  const floatTo16BitPCM = function floatTo16BitPCM(input, output) {
-    for (let i = 0; i < input.length; i++) {
-      let s = Math.max(-1, Math.min(1, input[i]))
-      output[i] = (s < 0 ? s * 0x8000 : s * 0x7FFF)
-    }
-  }
-
-  const convertBuffer = function(arrayBuffer) {
-    const data = new Float32Array(arrayBuffer)
-    let out = new Int16Array(arrayBuffer.length)
-    floatTo16BitPCM(data, out)
-    return out
-  }
-
-  const encode = function (arrayBuffer) {
-    samplesMono = convertBuffer(arrayBuffer)
-    let remaining = samplesMono.length
-    for (let i = 0; remaining >= 0; i += maxSamples) {
-      let left = samplesMono.subarray(i, i + maxSamples)
-      let mp3buf = mp3Encoder.encodeBuffer(left)
-      appendToBuffer(mp3buf)
-      remaining -= maxSamples
-    }
-  }
-
-  const finish = function () {
-    appendToBuffer(mp3Encoder.flush())
-    self.postMessage({ cmd: 'end', buf: dataBuffer })
-    if (config.debug)
-      console.log('Sending finished command')
-    clearBuffer()
-  }
-
-  self.addEventListener('message', function(e) {
-    if (e.data.topic === 'data')
-      encode(e.data.buf)
-    else if(e.data.topic === 'init')
-      init({ sampleRate: e.data.sampleRate, bitRate: e.data.bitRate, lameUrl: e.data.lameUrl })
-    else if (e.data.topic === 'finish')
-      finish()
-  })
-}
-
-},{}],15:[function(require,module,exports){
-'use strict'
-
-const pubsub  = require('ev-pubsub')
-const workify = require('webworkify')
-
-
-// take in a MediaStreamAudioSourceNode instance and generate mp3 audio,
-// downsampling in the process. internally uses a web worker to offload
-// CPU intensive work to another thread.
-module.exports = function webAudioMp3Stream(options={}) {
-  const { sampleRate } = options
-
-  const lameUrl = options.lameUrl || (document.location.origin + '/js/lame.min.js')
-
-  if (!sampleRate)
-    throw new Error('couldnt construct mp3 stream; sampleRate undefined')
-
-  const { publish, subscribe, unsubscribe } = pubsub()
-
-  // set up a web worker with logic to encode audio to mp3
-  const encoder = workify(require('./encoder-worker'))
-  //const encoder = new Worker('/js/encoder-worker.js')
-
-  encoder.addEventListener('message', function (ev) {
-    if(ev.data.cmd === 'data')
-      publish('data', ev.data.buf)
-  })
-
-  // <= 32 kbps mp3 encoding doesn't seem to encode properly on android or ios
-  encoder.postMessage({ topic: 'init', sampleRate, bitRate: 64, lameUrl })
-
-  const pipe = function(destination) {
-    subscribe('data', destination.write)
-    return destination
-  }
-
-  const unpipe = function(destination) {
-    unsubscribe('data', destination ? destination.write : undefined)
-  }
-
-  const write = function(buf) {
-    encoder.postMessage({ topic: 'data', buf })
-  }
-
-  return Object.freeze({ pipe, unpipe, write })
-}
-
-},{"./encoder-worker":14,"ev-pubsub":17,"webworkify":31}],16:[function(require,module,exports){
-module.exports = clamp
-
-function clamp(value, min, max) {
-  return min < max
-    ? (value < min ? min : value > max ? max : value)
-    : (value < max ? max : value > min ? min : value)
-}
-
-},{}],17:[function(require,module,exports){
+},{"./finite-state-machine":5,"ev-pubsub":14,"lodash.pick":19}],14:[function(require,module,exports){
 'use strict'
 
 const nextTick    = require('next-tick-2')
@@ -1687,118 +1449,7 @@ module.exports = function pubsub() {
   return Object.freeze({ publish, subscribe, unsubscribe, once })
 }
 
-},{"next-tick-2":24,"remove-array-items":27}],18:[function(require,module,exports){
-// loosely based on example code at https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
-(function (root) {
-  'use strict';
-
-  /**
-   * Error thrown when any required feature is missing (Promises, navigator, getUserMedia)
-   * @constructor
-   */
-  function NotSupportedError() {
-    this.name = 'NotSupportedError';
-    this.message = 'getUserMedia is not implemented in this browser';
-  }
-  NotSupportedError.prototype = Error.prototype;
-
-  /**
-   * Fake Promise instance that behaves like a Promise except that it always rejects with a NotSupportedError.
-   * Used for situations where there is no global Promise constructor.
-   *
-   * The message will report that the getUserMedia API is not available.
-   * This is technically true because every browser that supports getUserMedia also supports promises.
-   **
-   * @see http://caniuse.com/#feat=stream
-   * @see http://caniuse.com/#feat=promises
-   * @constructor
-   */
-  function FakePromise() {
-    // make it chainable like a real promise
-    this.then = function() {
-      return this;
-    };
-
-    // but always reject with an error
-    var err = new NotSupportedError();
-    this.catch = function(cb) {
-      setTimeout(function () {
-        cb(err);
-      });
-    }
-  }
-
-  var isPromiseSupported = typeof Promise !== 'undefined';
-
-  // checks for root.navigator to enable server-side rendering of things that depend on this
-  // (will need to be updated on client, but at least doesn't throw this way)
-  var navigatorExists = typeof navigator !== "undefined";
-  // gump = mondern promise-based interface
-  // gum = old callback-based interface
-  var gump = navigatorExists && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
-  var gum = navigatorExists && (navigator.getUserMedia || navigator.webkitGetUserMedia ||  navigator.mozGetUserMedia || navigator.msGetUserMedia);
-
-  /**
-   * Wrapper for navigator.mediaDevices.getUserMedia.
-   * Always returns a Promise or Promise-like object, even in environments without a global Promise constructor
-   *
-   * @stream https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
-   *
-   * @param {Object} constraints - must include one or both of audio/video along with optional details for video
-   * @param {Boolean} [constraints.audio] - include audio data in the stream
-   * @param {Boolean|Object} [constraints.video] - include video data in the stream. May be a boolean or an object with additional constraints, see
-   * @returns {Promise<MediaStream>} a promise that resolves to a MediaStream object
-     */
-  function getUserMedia(constraints) {
-    // ensure that Promises are supported and we have a navigator object
-    if (!isPromiseSupported) {
-      return new FakePromise();
-    }
-
-    // Try the more modern, promise-based MediaDevices API first
-    //https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
-    if(gump) {
-      return navigator.mediaDevices.getUserMedia(constraints);
-    }
-
-    // fall back to the older method second, wrap it in a promise.
-    return new Promise(function(resolve, reject) {
-      // if navigator doesn't exist, then we can't use the getUserMedia API. (And probably aren't even in a browser.)
-      // assuming it does, try getUserMedia and then all of the prefixed versions
-
-      if (!gum) {
-        return reject(new NotSupportedError())
-      }
-      gum.call(navigator, constraints, resolve, reject);
-    });
-  }
-
-  getUserMedia.NotSupportedError = NotSupportedError;
-
-  // eslint-disable-next-line no-implicit-coercion
-  getUserMedia.isSupported = !!(isPromiseSupported && (gump || gum));
-
-  // UMD, loosely based on https://github.com/umdjs/umd/blob/master/templates/returnExportsGlobal.js
-  if (typeof define === 'function' && define.amd) {
-    // AMD. Register as an anonymous module.
-    define([], function () {
-      return getUserMedia;
-    });
-  } else if (typeof module === 'object' && module.exports) {
-    // Node. Does not work with strict CommonJS, but
-    // only CommonJS-like enviroments that support module.exports,
-    // like Node.
-    module.exports = getUserMedia;
-  } else {
-    // Browser globals
-    // polyfill the MediaDevices API if it does not exist.
-    root.navigator = root.navigator || {};
-    root.nagivator.mediaDevices = root.navigator.mediaDevices || {};
-    root.nagivator.mediaDevices.getUserMedia = root.nagivator.mediaDevices.getUserMedia || getUserMedia;
-  }
-}(this));
-
-},{}],19:[function(require,module,exports){
+},{"next-tick-2":20,"remove-array-items":22}],15:[function(require,module,exports){
 (function (process){
 // Coding standard for this project defined @ https://github.com/MatthewSH/standards/blob/master/JavaScript.md
 'use strict';
@@ -1806,7 +1457,7 @@ module.exports = function pubsub() {
 exports = module.exports = !!(typeof process !== 'undefined' && process.versions && process.versions.node);
 
 }).call(this,require('_process'))
-},{"_process":2}],20:[function(require,module,exports){
+},{"_process":2}],16:[function(require,module,exports){
 (function (global){
 'use strict'
 var isNode = require('is-node')
@@ -1823,11 +1474,11 @@ module.exports = isNode
     false
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"is-node":19}],21:[function(require,module,exports){
+},{"is-node":15}],17:[function(require,module,exports){
 (function (global){
 /*!
     localForage -- Offline Storage, Improved
-    Version 1.5.3
+    Version 1.5.5
     https://localforage.github.io/localForage
     (c) 2013-2017 Mozilla, Apache License 2.0
 */
@@ -2821,7 +2472,6 @@ function setItem(key, value, callback) {
 
                 try {
                     var store = transaction.objectStore(self._dbInfo.storeName);
-                    var req = store.put(value, key);
 
                     // The reason we don't _save_ null is because IE 10 does
                     // not support saving the `null` type in IndexedDB. How
@@ -2830,6 +2480,8 @@ function setItem(key, value, callback) {
                     if (value === null) {
                         value = undefined;
                     }
+
+                    var req = store.put(value, key);
 
                     transaction.oncomplete = function () {
                         // Cast to undefined so the value passed to
@@ -4253,7 +3905,7 @@ module.exports = localforage_js;
 },{"3":3}]},{},[4])(4)
 });
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],22:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 /**
 Copyright (c) 2012, Benjamin Dumke-von der Ehe
 
@@ -4393,7 +4045,7 @@ function lockImpl(key, callback, maxDuration, synchronous) {
     }
 }
 
-},{}],23:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 (function (global){
 /**
  * lodash (Custom Build) <https://lodash.com/>
@@ -4900,7 +4552,7 @@ var pick = baseRest(function(object, props) {
 module.exports = pick;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],24:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 'use strict'
 
 var ensureCallable = function (fn) {
@@ -4964,126 +4616,9 @@ module.exports = (function () {
 	}
 }())
 
-},{}],25:[function(require,module,exports){
-(function (process){
-// Generated by CoffeeScript 1.12.2
-(function() {
-  var getNanoSeconds, hrtime, loadTime, moduleLoadTime, nodeLoadTime, upTime;
-
-  if ((typeof performance !== "undefined" && performance !== null) && performance.now) {
-    module.exports = function() {
-      return performance.now();
-    };
-  } else if ((typeof process !== "undefined" && process !== null) && process.hrtime) {
-    module.exports = function() {
-      return (getNanoSeconds() - nodeLoadTime) / 1e6;
-    };
-    hrtime = process.hrtime;
-    getNanoSeconds = function() {
-      var hr;
-      hr = hrtime();
-      return hr[0] * 1e9 + hr[1];
-    };
-    moduleLoadTime = getNanoSeconds();
-    upTime = process.uptime() * 1e9;
-    nodeLoadTime = moduleLoadTime - upTime;
-  } else if (Date.now) {
-    module.exports = function() {
-      return Date.now() - loadTime;
-    };
-    loadTime = Date.now();
-  } else {
-    module.exports = function() {
-      return new Date().getTime() - loadTime;
-    };
-    loadTime = new Date().getTime();
-  }
-
-}).call(this);
-
-
-
-}).call(this,require('_process'))
-},{"_process":2}],26:[function(require,module,exports){
-(function (global){
-var now = require('performance-now')
-  , root = typeof window === 'undefined' ? global : window
-  , vendors = ['moz', 'webkit']
-  , suffix = 'AnimationFrame'
-  , raf = root['request' + suffix]
-  , caf = root['cancel' + suffix] || root['cancelRequest' + suffix]
-
-for(var i = 0; !raf && i < vendors.length; i++) {
-  raf = root[vendors[i] + 'Request' + suffix]
-  caf = root[vendors[i] + 'Cancel' + suffix]
-      || root[vendors[i] + 'CancelRequest' + suffix]
-}
-
-// Some versions of FF have rAF but not cAF
-if(!raf || !caf) {
-  var last = 0
-    , id = 0
-    , queue = []
-    , frameDuration = 1000 / 60
-
-  raf = function(callback) {
-    if(queue.length === 0) {
-      var _now = now()
-        , next = Math.max(0, frameDuration - (_now - last))
-      last = next + _now
-      setTimeout(function() {
-        var cp = queue.slice(0)
-        // Clear queue here to prevent
-        // callbacks from appending listeners
-        // to the current frame's queue
-        queue.length = 0
-        for(var i = 0; i < cp.length; i++) {
-          if(!cp[i].cancelled) {
-            try{
-              cp[i].callback(last)
-            } catch(e) {
-              setTimeout(function() { throw e }, 0)
-            }
-          }
-        }
-      }, Math.round(next))
-    }
-    queue.push({
-      handle: ++id,
-      callback: callback,
-      cancelled: false
-    })
-    return id
-  }
-
-  caf = function(handle) {
-    for(var i = 0; i < queue.length; i++) {
-      if(queue[i].handle === handle) {
-        queue[i].cancelled = true
-      }
-    }
-  }
-}
-
-module.exports = function(fn) {
-  // Wrap in a new function to prevent
-  // `cancel` potentially being assigned
-  // to the native rAF function
-  return raf.call(root, fn)
-}
-module.exports.cancel = function() {
-  caf.apply(root, arguments)
-}
-module.exports.polyfill = function(object) {
-  if (!object) {
-    object = root;
-  }
-  object.requestAnimationFrame = raf
-  object.cancelAnimationFrame = caf
-}
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"performance-now":25}],27:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
+!function(e,t){"object"==typeof exports&&"object"==typeof module?module.exports=t():"function"==typeof define&&define.amd?define([],t):"object"==typeof exports?exports.Recorder=t():e.Recorder=t()}(this,function(){return function(e){function t(o){if(n[o])return n[o].exports;var i=n[o]={i:o,l:!1,exports:{}};return e[o].call(i.exports,i,i.exports,t),i.l=!0,i.exports}var n={};return t.m=e,t.c=n,t.d=function(e,n,o){t.o(e,n)||Object.defineProperty(e,n,{configurable:!1,enumerable:!0,get:o})},t.n=function(e){var n=e&&e.__esModule?function(){return e.default}:function(){return e};return t.d(n,"a",n),n},t.o=function(e,t){return Object.prototype.hasOwnProperty.call(e,t)},t.p="",t(t.s=0)}([function(e,t,n){"use strict";(function(t){var n=function(e){var o=this,i=t.AudioContext||t.webkitAudioContext;if(!n.isRecordingSupported())throw new Error("Recording is not supported in this browser");this.state="inactive",this.eventTarget=t.document.createDocumentFragment(),this.audioContext=new i,this.monitorNode=this.audioContext.createGain(),this.config=Object.assign({bufferLength:4096,command:"init",encoderApplication:2049,encoderFrameSize:20,encoderPath:"encoderWorker.min.js",encoderSampleRate:48e3,leaveStreamOpen:!1,maxBuffersPerPage:40,monitorGain:0,numberOfChannels:1,originalSampleRate:this.audioContext.sampleRate,resampleQuality:3,mediaTrackConstraints:!0,streamPages:!1,wavBitDepth:16,wavSampleRate:this.audioContext.sampleRate},e),this.setMonitorGain(this.config.monitorGain),this.scriptProcessorNode=this.audioContext.createScriptProcessor(this.config.bufferLength,this.config.numberOfChannels,this.config.numberOfChannels),this.scriptProcessorNode.onaudioprocess=function(e){o.encodeBuffers(e.inputBuffer)}};n.isRecordingSupported=function(){var e=t.AudioContext||t.webkitAudioContext,n=t.navigator&&(t.navigator.getUserMedia||t.navigator.mediaDevices&&t.navigator.mediaDevices.getUserMedia);return e&&n},n.prototype.addEventListener=function(e,t,n){this.eventTarget.addEventListener(e,t,n)},n.prototype.clearStream=function(){this.stream&&(this.stream.getTracks?this.stream.getTracks().forEach(function(e){e.stop()}):this.stream.stop(),delete this.stream)},n.prototype.encodeBuffers=function(e){if("recording"===this.state){for(var t=[],n=0;n<e.numberOfChannels;n++)t[n]=e.getChannelData(n);this.encoder.postMessage({command:"encode",buffers:t})}},n.prototype.initStream=function(){var e=this,n=function(n){return e.stream=n,e.sourceNode=e.audioContext.createMediaStreamSource(n),e.sourceNode.connect(e.scriptProcessorNode),e.sourceNode.connect(e.monitorNode),e.eventTarget.dispatchEvent(new t.Event("streamReady")),n},o=function(n){throw e.eventTarget.dispatchEvent(new t.ErrorEvent("streamError",{error:n})),n},i={audio:this.config.mediaTrackConstraints};return this.stream?(this.eventTarget.dispatchEvent(new t.Event("streamReady")),t.Promise.resolve(this.stream)):t.navigator.mediaDevices&&t.navigator.mediaDevices.getUserMedia?t.navigator.mediaDevices.getUserMedia(i).then(n,o):t.navigator.getUserMedia?new t.Promise(function(e,n){t.navigator.getUserMedia(i,e,n)}).then(n,o):void 0},n.prototype.pause=function(){"recording"===this.state&&(this.state="paused",this.eventTarget.dispatchEvent(new t.Event("pause")))},n.prototype.removeEventListener=function(e,t,n){this.eventTarget.removeEventListener(e,t,n)},n.prototype.resume=function(){"paused"===this.state&&(this.state="recording",this.eventTarget.dispatchEvent(new t.Event("resume")))},n.prototype.setMonitorGain=function(e){this.monitorNode.gain.value=e},n.prototype.start=function(){if("inactive"===this.state&&this.stream){var e=this;this.encoder=new t.Worker(this.config.encoderPath),this.config.streamPages?this.encoder.addEventListener("message",function(t){e.streamPage(t.data)}):(this.recordedPages=[],this.totalLength=0,this.encoder.addEventListener("message",function(t){e.storePage(t.data)})),this.encodeBuffers=function(){delete this.encodeBuffers},this.state="recording",this.monitorNode.connect(this.audioContext.destination),this.scriptProcessorNode.connect(this.audioContext.destination),this.eventTarget.dispatchEvent(new t.Event("start")),this.encoder.postMessage(this.config)}},n.prototype.stop=function(){"inactive"!==this.state&&(this.state="inactive",this.monitorNode.disconnect(),this.scriptProcessorNode.disconnect(),this.config.leaveStreamOpen||this.clearStream(),this.encoder.postMessage({command:"done"}))},n.prototype.storePage=function(e){if(null===e){for(var n=new Uint8Array(this.totalLength),o=0,i=0;i<this.recordedPages.length;i++)n.set(this.recordedPages[i],o),o+=this.recordedPages[i].length;this.eventTarget.dispatchEvent(new t.CustomEvent("dataAvailable",{detail:n})),this.recordedPages=[],this.eventTarget.dispatchEvent(new t.Event("stop"))}else this.recordedPages.push(e),this.totalLength+=e.length},n.prototype.streamPage=function(e){null===e?this.eventTarget.dispatchEvent(new t.Event("stop")):this.eventTarget.dispatchEvent(new t.CustomEvent("dataAvailable",{detail:e}))},e.exports=n}).call(t,n(1))},function(e,t){var n;n=function(){return this}();try{n=n||Function("return this")()||(0,eval)("this")}catch(e){"object"==typeof window&&(n=window)}e.exports=n}])});
+},{}],22:[function(require,module,exports){
 'use strict'
 
 /**
@@ -5113,7 +4648,7 @@ module.exports = function removeItems(arr, startIdx, removeCount)
   arr.length = len
 }
 
-},{}],28:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 /**
  * Convert array of 16 byte values to UUID string format of the form:
  * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
@@ -5138,7 +4673,7 @@ function bytesToUuid(buf, offset) {
 
 module.exports = bytesToUuid;
 
-},{}],29:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 (function (global){
 // Unique ID creation requires a high quality random # generator.  In the
 // browser this is a little complicated due to unknown quality of Math.random()
@@ -5175,7 +4710,7 @@ if (!rng) {
 module.exports = rng;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],30:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 var rng = require('./lib/rng');
 var bytesToUuid = require('./lib/bytesToUuid');
 
@@ -5206,7 +4741,7 @@ function v4(options, buf, offset) {
 
 module.exports = v4;
 
-},{"./lib/bytesToUuid":28,"./lib/rng":29}],31:[function(require,module,exports){
+},{"./lib/bytesToUuid":23,"./lib/rng":24}],26:[function(require,module,exports){
 var bundleFn = arguments[3];
 var sources = arguments[4];
 var cache = arguments[5];
@@ -5288,7 +4823,7 @@ module.exports = function (fn, options) {
     return worker;
 };
 
-},{}],32:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 'use strict'
 
 const localforage = require('localforage')
@@ -5304,8 +4839,9 @@ module.exports = async function audioStorage(options={}) {
 
 
   // @param uuid  v4 uuid of recording
+  // @param type  audio/mp3 | audio/ogg
   // @param meta  optional object containing custom metadata
-  const createRecording = async function(uuid, meta={}) {
+  const createRecording = async function(uuid, type, meta={}) {
     currentRecording = await getRecording(uuid)
 
     if(currentRecording)
@@ -5317,7 +4853,7 @@ module.exports = async function audioStorage(options={}) {
         created: Date.now(),
         finalized: false,
         syncedToServer: false,
-        type: 'audio/mp3',
+        type,
         custom: meta
       },
       segments: [ ]
@@ -5344,6 +4880,15 @@ module.exports = async function audioStorage(options={}) {
     }
 
     currentRecording.segments.push(currentSegment)
+  }
+
+
+  const editMetadata = async function(audioId, meta) {
+    const recording = await getRecording(audioId)
+    if(recording) {
+      recording.meta.custom = meta
+      await localforage.setItem(`${objectPrefix}-${recording.uuid}`, recording)
+    }
   }
 
 
@@ -5448,9 +4993,9 @@ module.exports = async function audioStorage(options={}) {
   //await localforage.clear()
 
   return Object.freeze({ clearSegments, createRecording, createSegment,
-    finalizeRecording, getAllRecordings, getFinalizedRecordings, getRecording,
-    listRecordings, setSegmentTranscription, markUploaded, removeRecording,
-    write, pipe, unpipe })
+    editMetadata, finalizeRecording, getAllRecordings, getFinalizedRecordings,
+    getRecording, listRecordings, setSegmentTranscription, markUploaded,
+    removeRecording, write, pipe, unpipe })
 }
 
-},{"./lib/convert-cached-audio-to-entry":4,"ev-pubsub":17,"localforage":21}]},{},[1]);
+},{"./lib/convert-cached-audio-to-entry":4,"ev-pubsub":14,"localforage":17}]},{},[1]);
