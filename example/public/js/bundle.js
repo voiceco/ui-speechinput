@@ -262,8 +262,8 @@ module.exports = function speechInput(options={}) {
   if(!secret)
     throw new Error('You must specify an API secret')
 
-  //const apiHost = 'https://audio.voiceco.ai'
-  const apiHost = 'https://localhost:3003'
+  const apiHost = 'https://audio.voiceco.ai'
+  //const apiHost = 'https://localhost:3003'
 
   const objectPrefix = 'voiceco-' + key
   const sync = syncManager({ objectPrefix, apiHost, apiId: key, apiSecret: secret })
