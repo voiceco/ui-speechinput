@@ -700,9 +700,11 @@ module.exports = function microphoneStream() {
     return destination
   }
 
+
   const unpipe = function(destination) {
     unsubscribe('data', destination ? destination.write : undefined)
   }
+
 
   // you don't need to call this from a user gesture; it will work fine in mobile contexts
   // as long as this object was constructed from a user gesture
@@ -725,7 +727,6 @@ module.exports = function microphoneStream() {
       streamPages: true
     })
 
-
     encoder.addEventListener('dataAvailable', function (ev) {
       // ev.detail is a Uint8Array
       //const dataBlob = new Blob( [ev.detail], { type: 'audio/ogg' })
@@ -742,13 +743,13 @@ module.exports = function microphoneStream() {
     encoder.start()
   }
 
-  const stop = function() {
-    if(!encoder)
-      return
 
-    encoder.stop()
+  const stop = function() {
+    if(encoder)
+      encoder.stop()
     encoder = undefined
   }
+
 
   return Object.freeze({ pipe, unpipe, start, stop, sampleRate: audioContext.sampleRate })
 }
@@ -1328,7 +1329,7 @@ module.exports = function watsonSpeechToText(options={}) {
 
   const _initSocket = async function(token) {
     return new Promise(function(resolve, reject) {
-      console.log('token:', token)
+      //console.log('token:', token)
       const queryString = stringify({ model: 'en-US_BroadbandModel', 'watson-token': token })
       const wsURI = `wss://stream.watsonplatform.net/speech-to-text/api/v1/recognize?${queryString}`
       try {
