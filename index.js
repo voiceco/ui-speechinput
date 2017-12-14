@@ -4,7 +4,7 @@ const audioStorage = require('./storage')
 const fsmFactory   = require('./lib/finite-state-machine')
 const getToken     = require('./lib/watson-get-token')
 const micStream    = require('./lib/stream-microphone')
-const mp3Stream    = require('./lib/webaudio-mp3-stream')
+//const mp3Stream    = require('./lib/webaudio-mp3-stream')
 const press        = require('./lib/press')
 const recLabel     = require('./lib/ui-recordinglabel')
 const resultStream = require('./lib/watson-stt-result-stream')
@@ -94,7 +94,7 @@ module.exports = function speechInput(options={}) {
   const recordButton = dom.querySelector('button.record')
   press.once(recordButton, function(ev) {
     mic = micStream()
-    mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
+    //mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
   })
 
 
@@ -202,10 +202,10 @@ module.exports = function speechInput(options={}) {
       await mic.start()
 
       storage.createSegment()
-      mp3Encoder.pipe(storage)
+      //mp3Encoder.pipe(storage)
 
       mic
-        .pipe(mp3Encoder)
+        //.pipe(mp3Encoder)
         .pipe(speech)
         .pipe(sttResultStream)
 
@@ -238,7 +238,7 @@ module.exports = function speechInput(options={}) {
       recordLabel.hide()
       speech.recognizeStop()
       mic.unpipe()
-      mp3Encoder.unpipe()
+      //mp3Encoder.unpipe()
       mic.stop()
       speech.unpipe()
       currentItem = undefined

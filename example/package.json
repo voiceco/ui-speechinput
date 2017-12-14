@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "lamejs": "^1.2.0",
     "serve": "^6.4.1"
   },
   "devDependencies": {
