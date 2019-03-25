@@ -13,7 +13,7 @@ const secret = 'e39a7d2d-fb2f-4f70-aed9-57d7543a7d2d'
 const s = speech({ key, secret })
 document.body.appendChild(s.dom)
 
-document.querySelector('button').addEventListener('click', async function(ev) {
+document.querySelector('button').addEventListener('click', async function (ev) {
   output.innerText = ''
   this.setAttribute('disabled', true)
   const result = await s.transcribe({ fun: true, color: 'red', favs: [ '1', 'two', true ] })
@@ -246,19 +246,19 @@ finite state machine for speechinput widget. initial state: IDLE
         └-------------------------┘
 */
 
-function appendItem() {
+function appendItem () {
   const item = document.createElement('p')
   item.classList.add('me-text')
   return item
 }
 
-module.exports = function speechInput(options={}) {
+module.exports = function speechInput (options={}) {
   const { key, secret } = options
 
-  if(!key)
+  if (!key)
     throw new Error('You must specify an API key')
 
-  if(!secret)
+  if (!secret)
     throw new Error('You must specify an API secret')
 
   const apiHost = 'https://audio.voiceco.ai'
@@ -302,14 +302,14 @@ module.exports = function speechInput(options={}) {
   const speech = watsonSTT({ interim_results: true, smart_formatting: true })
 
   const recordButton = dom.querySelector('button.record')
-  press.once(recordButton, function(ev) {
+  press.once(recordButton, function (ev) {
     mic = micStream()
     mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
   })
 
 
   fsm.addState('idle', {
-    enter: function(er) {
+    enter: function (er) {
       if (er) {
         recordLabel.hide()
         statusLabel.innerText = er
@@ -319,7 +319,7 @@ module.exports = function speechInput(options={}) {
       output.innerText = ''
       const button = select('button.record')
       button.innerText = '●'
-      button.onclick = function(ev) {
+      button.onclick = function (ev) {
         button.setAttribute('disabled', true)
         fsm.setState('setup-recording')
       }
@@ -330,20 +330,20 @@ module.exports = function speechInput(options={}) {
         'button.record': false
       })
     },
-    exit: function() {
+    exit: function () {
       statusLabel.innerText = ''
       statusLabel.style.display = 'none'
     }
   })
 
-  const select = function(str) {
+  const select = function (str) {
     return dom.querySelector(str)
   }
 
   // key is button selector, value is disabled bool
-  const setButtonDisabledStates = function(states) {
-    Object.keys(states).forEach(function(selector) {
-      if(states[selector])
+  const setButtonDisabledStates = function (states) {
+    Object.keys(states).forEach(function (selector) {
+      if (states[selector])
         select(selector).setAttribute('disabled', true)
       else
         select(selector).removeAttribute('disabled')
@@ -351,7 +351,7 @@ module.exports = function speechInput(options={}) {
   }
 
   fsm.addState('offline', {
-    enter: function() {
+    enter: function () {
       setButtonDisabledStates({
         'button.re-record': true,
         'button.done': true,
@@ -361,7 +361,7 @@ module.exports = function speechInput(options={}) {
   })
 
   fsm.addState('setup-recording', {
-    enter: async function() {
+    enter: async function () {
       setButtonDisabledStates({
         'button.re-record': true,
         'button.done': true,
@@ -379,16 +379,16 @@ module.exports = function speechInput(options={}) {
     }
   })
 
-  const recordingState = function() {
+  const recordingState = function () {
     let sttResultStream, currentItem
 
-    const _visibilityChanged = function() {
+    const _visibilityChanged = function () {
       // when the page is hidden, pause recording
-      if(document.hidden)
+      if (document.hidden)
         fsm.setState('paused')
     }
 
-    const enter = async function() {
+    const enter = async function () {
       document.addEventListener('visibilitychange', _visibilityChanged)
 
       currentItem = appendItem()
@@ -397,7 +397,7 @@ module.exports = function speechInput(options={}) {
       recordButton.innerText = '⏸'
 
       sttResultStream = resultStream()
-      sttResultStream.subscribe('data', function _receiveSTTResults(data) {
+      sttResultStream.subscribe('data', function _receiveSTTResults (data) {
         currentItem.innerText = data
         //window.scrollTo(0, document.body.scrollHeight)
         //output.style.height = dom.clientHeight - 100 + 'px'
@@ -405,7 +405,7 @@ module.exports = function speechInput(options={}) {
         //dom.parentNode.scrollTop = dom.parentNode.scrollHeight
       })
 
-      speech.subscribe('error', function(er) {
+      speech.subscribe('error', function (er) {
         fsm.setState('idle', er)
       })
 
@@ -419,15 +419,15 @@ module.exports = function speechInput(options={}) {
         .pipe(speech)
         .pipe(sttResultStream)
 
-      select('button.record').onclick = function(ev) {
+      select('button.record').onclick = function (ev) {
         fsm.setState('paused')
       }
 
-      select('button.re-record').onclick = function(ev) {
+      select('button.re-record').onclick = function (ev) {
         fsm.setState('clearing')
       }
 
-      select('button.done').onclick = function(ev) {
+      select('button.done').onclick = function (ev) {
         fsm.setState('finalizing')
       }
 
@@ -440,7 +440,7 @@ module.exports = function speechInput(options={}) {
       recordLabel.show()
     }
 
-    const exit = function() {
+    const exit = function () {
       storage.setSegmentTranscription(currentItem.innerText)
       document.removeEventListener('visibilitychange', _visibilityChanged)
       sttResultStream.unsubscribe('data')
@@ -460,16 +460,16 @@ module.exports = function speechInput(options={}) {
   fsm.addState('recording', recordingState())
 
   fsm.addState('paused', {
-    enter: function() {
-      select('button.record').onclick = function(ev) {
+    enter: function () {
+      select('button.record').onclick = function (ev) {
         fsm.setState('setup-recording')
       }
 
-      select('button.re-record').onclick =  function(ev) {
+      select('button.re-record').onclick =  function (ev) {
         fsm.setState('clearing')
       }
 
-      select('button.done').onclick = function(ev) {
+      select('button.done').onclick = function (ev) {
         fsm.setState('finalizing')
       }
 
@@ -488,7 +488,7 @@ module.exports = function speechInput(options={}) {
   })
 
   fsm.addState('clearing', {
-    enter: function() {
+    enter: function () {
       setButtonDisabledStates({
         'button.re-record': true,
         'button.done': true,
@@ -501,42 +501,42 @@ module.exports = function speechInput(options={}) {
   })
 
   fsm.addState('finalizing', {
-    enter: function() {
-      if(transcriptionPromise.resolve)
+    enter: function () {
+      if (transcriptionPromise.resolve)
         transcriptionPromise.resolve(output.innerText)
       fsm.setState('idle')
     }
   })
 
-  window.addEventListener('offline', function offline() {
+  window.addEventListener('offline', function offline () {
     fsm.setState('offline')
   })
 
-  window.addEventListener('online', function offline() {
-    if(output.innerText.length)
+  window.addEventListener('online', function offline () {
+    if (output.innerText.length)
       fsm.setState('paused')
     else
       fsm.setState('idle')
   })
 
-  const cancel = function() {
+  const cancel = function () {
     pause()
     dom.style.opacity = 0
     transcriptionPromise.resolve = undefined
     transcriptionPromise.rej = undefined
   }
 
-  const pause = function() {
+  const pause = function () {
     fsm.setState('paused')
   }
 
-  const transcribe = async function(userMeta={}) {
-    if(!storage)
+  const transcribe = async function (userMeta={}) {
+    if (!storage)
       storage = await audioStorage({ objectPrefix })
 
     //output.style.height = dom.clientHeight - 100 + 'px'
 
-    if(transcriptionPromise.resolve)
+    if (transcriptionPromise.resolve)
       throw new Error('cannot transcribe more than 1 audio at a time')
 
     const uuid = uuidV4()
@@ -544,7 +544,7 @@ module.exports = function speechInput(options={}) {
     fsm.setState('idle')
     dom.style.opacity = 1
 
-    const text = await new Promise(function(res, rej) {
+    const text = await new Promise(function (res, rej) {
       transcriptionPromise.resolve = res
       transcriptionPromise.rej = rej
     })
@@ -563,11 +563,11 @@ module.exports = function speechInput(options={}) {
 'use strict'
 
 module.exports = function convertCachedAudioToEntry (entry) {
-  const parts = []
-  const transcriptions = []
-  entry.segments.forEach(function(s) {
+  const parts = [ ]
+  const transcriptions = [ ]
+  entry.segments.forEach(function (s) {
     transcriptions.push(s.transcription)
-    s.data.forEach(function(s2) {
+    s.data.forEach(function (s2) {
       parts.push(s2)
     })
   })
@@ -646,7 +646,7 @@ const event = 'click' //isTouch ? 'touchstart' : 'click'
 
 // encapsulates mobile touchstarts and desktop clicks
 module.exports = {
-  on: function(el, handler) {
+  on: function (el, handler) {
     // a workaround for ios safari
     if(isTouch)
       el.style.cursor = 'pointer'
@@ -654,18 +654,18 @@ module.exports = {
     //el.addEventListener(event, handler, passiveSupported ? { passive: true } : false)
     el.addEventListener(event, handler)//, passiveSupported)
   },
-  once: function(el, handler) {
+  once: function (el, handler) {
     // a workaround for ios safari
-    if(isTouch)
+    if (isTouch)
       el.style.cursor = 'pointer'
 
-    const _tmp = function(ev) {
+    const _tmp = function (ev) {
       el.removeEventListener(event, _tmp)
       handler(ev)
     }
     el.addEventListener(event, _tmp)//, passiveSupported)
   },
-  off: function(el, handler) {
+  off: function (el, handler) {
     el.removeEventListener(event, handler)
   }
 }
@@ -839,7 +839,7 @@ module.exports = function syncManager (options={}) {
   fsm.addState('IDLE', idleState())
 
   fsm.addState('SYNCING', {
-    enter: function() {
+    enter: function () {
       syncer.postMessage({ topic: 'init', apiHost, objectPrefix, apiId, apiSecret })
     }
   })
@@ -851,7 +851,7 @@ module.exports = function syncManager (options={}) {
     sessionStorage.setItem('sync-last-ping', Date.now())
 
     // fired when the worker has finished uploading a file to the backend, or there was an error
-    if(ev.data.cmd === 'done')
+    if (ev.data.cmd === 'done')
       fsm.setState('IDLE')
   })
 
@@ -864,11 +864,11 @@ module.exports = function syncManager (options={}) {
 const storage = require('../../storage')
 
 
-module.exports = function(self) {
+module.exports = function (self) {
   let s
 
   const upload = async function (audioId, apiHost, apiId, apiSecret) {
-    return new Promise(async function(resolve, reject) {
+    return new Promise(async function (resolve, reject) {
 
       const recording = await s.getRecording(audioId)
       const request = new XMLHttpRequest()
@@ -878,14 +878,14 @@ module.exports = function(self) {
         segments: []
       }
 
-      recording.segments.forEach(function(segment) {
+      recording.segments.forEach(function (segment) {
         result.segments.push(segment.transcription)
       })
 
       request.open('PUT', apiHost + '/audio/' + audioId + '?encoding=mp3&apiId=' + apiId + '&apiSecret=' + apiSecret + '&meta='+JSON.stringify(result), true)
 
       let progress = 0
-      request.upload.onprogress = function(e) {
+      request.upload.onprogress = function (e) {
         if (e.lengthComputable) {
           progress = (e.loaded / e.total) * 100
           console.log('progress:', progress)
@@ -894,7 +894,7 @@ module.exports = function(self) {
         }
       }
 
-      request.onload = async function() {
+      request.onload = async function () {
         const resp = this.response
         if (this.status >= 200 && this.status < 400) {
           // TODO: read duration, other meta data out of response object
@@ -906,15 +906,15 @@ module.exports = function(self) {
         }
       }
 
-      request.onerror = function() {
+      request.onerror = function () {
         // There was a connection error of some sort
         console.log('connection error of some sort')
         reject()
       }
 
-      const parts = []
-      recording.segments.forEach(function(s) {
-        s.data.forEach(function(s2) {
+      const parts = [ ]
+      recording.segments.forEach(function (s) {
+        s.data.forEach(function (s2) {
           parts.push(s2)
         })
       })
@@ -932,31 +932,31 @@ module.exports = function(self) {
     })
   }
 
-  const chooseRandomId = async function() {
+  const chooseRandomId = async function () {
     const recordings = await s.listRecordings()
     const readyToSend = []
-    for(let i=0; i < recordings.length; i++) {
+    for (let i=0; i < recordings.length; i++) {
       let audioId = recordings[i]
       let r = await s.getRecording(audioId)
-      if(r.meta.finalized && !r.meta.syncedToServer)
+      if (r.meta.finalized && !r.meta.syncedToServer)
         readyToSend.push(r)
     }
 
-    if(readyToSend.length) {
+    if (readyToSend.length) {
       const idx = Math.floor(Math.random() * readyToSend.length)
       return readyToSend[idx].uuid
     }
   }
 
-  const init = async function(options) {
+  const init = async function (options) {
     const { apiHost, objectPrefix, apiId, apiSecret } = options
-    if(!s)
+    if (!s)
       s = await storage({ objectPrefix })
 
     // pick a random story which is finalized but not uploaded
     const id = await chooseRandomId()
 
-    if(!id)
+    if (!id)
       return self.postMessage({ cmd: 'done' })
 
     try {
@@ -969,8 +969,8 @@ module.exports = function(self) {
     }
   }
 
-  self.addEventListener('message', function(e) {
-    if(e.data.topic === 'init')
+  self.addEventListener('message', function (e) {
+    if (e.data.topic === 'init')
       init(e.data)
   })
 }
@@ -978,7 +978,7 @@ module.exports = function(self) {
 },{"../../storage":27}],10:[function(require,module,exports){
 'use strict'
 
-module.exports = function recordingLabel(dom) {
+module.exports = function recordingLabel (dom) {
   dom.innerHTML = `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
    width="30px" height="30px" viewBox="0 0 24 30" style="enable-background:new 0 0 50 50;" xml:space="preserve">
   <rect x="0" y="10" width="4" height="10" fill="#f00" opacity="0.2">
@@ -1012,13 +1012,13 @@ module.exports = function recordingLabel(dom) {
   dom.style.transitionDuration = '0.2s'
   dom.style.opacity = 0
 
-  const show = function(text='recording', color='rgba(255, 0, 0, 0.92)') {
+  const show = function (text='recording', color='rgba(255, 0, 0, 0.92)') {
     dom.querySelector('span').innerText = text
     dom.style.display = 'flex'
     dom.style.opacity = 1
   }
 
-  const hide = function() {
+  const hide = function () {
     dom.style.opacity = 0
     dom.style.display = 'none'
   }
@@ -1032,10 +1032,10 @@ module.exports = function recordingLabel(dom) {
 const FIFTY_MINUTES_IN_MILLISECONDS = 50 * 60 * 1000
 
 // get a Watson speech to text token, either from the cache or from the Watson API
-module.exports = async function getToken(url='/token') {
+module.exports = async function getToken (url='/token') {
   let token = localStorage.getItem('watson-stt-token')
 
-  if(token) {
+  if (token) {
     token = JSON.parse(token)
     // there is at least 10 minutes remaining on the token, it's valid
     if (Date.now() < token.expiresAt)
@@ -1043,7 +1043,7 @@ module.exports = async function getToken(url='/token') {
   }
 
   const response = await fetch(url)
-  if(response && response.status == 200) {
+  if (response && response.status == 200) {
     let body = await response.json()
     token = body.token
     localStorage.setItem('watson-stt-token', JSON.stringify({
@@ -1063,38 +1063,37 @@ const pubsub = require('ev-pubsub')
 
 
 // read intermediate watson speech-to-text data and emit events
-module.exports = function watsonSTTResultStream(options={}) {
+module.exports = function watsonSTTResultStream (options={ }) {
   const { publish, subscribe, unsubscribe } = pubsub()
 
   let index = 0  // store the last "finished" transcription entry
-  const transcriptions = []
+  const transcriptions = [ ]
 
   // remove all contents from the result stream
-  const clear = function() {
+  const clear = function () {
     index = 0
     transcriptions.length = 0
   }
 
-  const markBoundary = function(clearData=false) {
+  const markBoundary = function (clearData=false) {
     if (clearData) {
       // when clearData is true, empty out all of the text so that it's not saved
-      for (let i=index; i >= 0 && i < transcriptions.length; i++) {
+      for (let i=index; i >= 0 && i < transcriptions.length; i++)
         transcriptions[i].results.length = 0
-      }
     }
     index = transcriptions.length
   }
 
-  const pipe = function(destination) {
+  const pipe = function (destination) {
     subscribe('data', destination.write)
     return destination
   }
 
-  const unpipe = function(destination) {
+  const unpipe = function (destination) {
     unsubscribe('data', destination ? destination.write : undefined)
   }
 
-  const write = function(data) {
+  const write = function (data) {
     if (!data.results)
       return
 
@@ -1105,11 +1104,11 @@ module.exports = function watsonSTTResultStream(options={}) {
     const replacer = new RegExp('%HESITATION', 'g')
 
     const current = _getTranscriptions()
-    current.forEach(function(next) {
-      if(next.results.length && next.results[0].alternatives.length) {
+    current.forEach(function (next) {
+      if (next.results.length && next.results[0].alternatives.length) {
         tt = next.results[0].alternatives[0].transcript.replace(replacer, '').trim()
         // only punctuate completed (final) sentences
-        if(next.results[0].final)
+        if (next.results[0].final)
           text += (tt.charAt(0).toUpperCase() + tt.slice(1) + '.  ')
         else
           text += tt
@@ -1119,7 +1118,7 @@ module.exports = function watsonSTTResultStream(options={}) {
     publish('data', text)
   }
 
-  const _getTranscriptions = function() {
+  const _getTranscriptions = function () {
     // return a copy of all new transcriptions from the boundary position onwards
     return (index >= 0 && index < transcriptions.length) ? transcriptions.slice(index) : []
   }
@@ -1176,9 +1175,9 @@ const OPENING_MESSAGE_PARAMS_ALLOWED = [
  * @param {Object} queryParams
  * @return {String}
  */
-function stringify(queryParams) {
+function stringify (queryParams) {
   return Object.keys(queryParams)
-    .map(function(key) {
+    .map(function (key) {
       return key + '=' + (key === 'watson-token' ? queryParams[key] : encodeURIComponent(queryParams[key])) // the server chokes if the token is correctly url-encoded
     })
     .join('&')
@@ -1210,7 +1209,7 @@ function stringify(queryParams) {
  * @param {Number} [options.X-Watson-Learning-Opt-Out=false] - set to true to opt-out of allowing Watson to use this request to improve it's services
  * @param {Boolean} [options.smart_formatting=false] - formats numeric values such as dates, times, currency, etc.
  */
-module.exports = function watsonSpeechToText(options={}) {
+module.exports = function watsonSpeechToText (options={}) {
   const { publish, subscribe, unsubscribe } = pubsub()
   //if (options.inactivity_timeout === undefined)
   //  options.inactivity_timeout = -1
@@ -1220,27 +1219,27 @@ module.exports = function watsonSpeechToText(options={}) {
   let socket
 
   fsm.addState('stopped', {
-    enter: function(token) {
-      if(token)
+    enter: function (token) {
+      if (token)
         fsm.setState('starting', token)
     },
-    recognizeStart: function(token) {
+    recognizeStart: function (token) {
       fsm.setState('starting', token)
     }
   })
 
   fsm.addState('stopping', {
-    enter: function() {
+    enter: function () {
       this.token = undefined
       _send(JSON.stringify({ action: 'stop' }))
     },
-    onmessage: function(message) {
+    onmessage: function (message) {
       // when listen message is received, ready for new recognition request.
       if (message.state === 'listening') {
         fsm.setState('stopped', this.token)
       }
     },
-    recognizeStart: function(token) {
+    recognizeStart: function (token) {
       // if a recognition start is attempted while in stopping state, store the
       // token so that it may be passed to stopped state later. Effectively
       // queues the recognizeStart action until reaching stopped state
@@ -1249,9 +1248,9 @@ module.exports = function watsonSpeechToText(options={}) {
   })
 
   fsm.addState('starting', {
-    enter: async function(token) {
+    enter: async function (token) {
       try {
-        if(!_isOpen())
+        if (!_isOpen())
           await _initSocket(token)
 
         const openingMessage = pick(options, OPENING_MESSAGE_PARAMS_ALLOWED)
@@ -1259,11 +1258,11 @@ module.exports = function watsonSpeechToText(options={}) {
         openingMessage['content-type'] = 'audio/mp3'
         console.log('sending watson header message', openingMessage)
         _send(JSON.stringify(openingMessage))
-      } catch(er) {
+      } catch (er) {
         fsm.setState('stopped')
       }
     },
-    onmessage: function(message) {
+    onmessage: function (message) {
       // when listen message is received, we are in a new recognition request
       if (message.state === 'listening') {
         fsm.setState('started')
@@ -1274,13 +1273,13 @@ module.exports = function watsonSpeechToText(options={}) {
         publish('data', message)
       }
     },
-    write: function(data) {
+    write: function (data) {
       _send(data)
     }
   })
 
   fsm.addState('started', {
-    onmessage: function(message) {
+    onmessage: function (message) {
       if (message.state === 'listening') {
         fsm.setState('started')
       } else if (message.error) {
@@ -1290,57 +1289,57 @@ module.exports = function watsonSpeechToText(options={}) {
         publish('data', message)
       }
     },
-    recognizeStop: function() {
+    recognizeStop: function () {
       fsm.setState('stopping')
     },
-    write: function(data) {
+    write: function (data) {
       _send(data)
     }
   })
 
-  const close = function() {
+  const close = function () {
     console.log('manually closing watson socket')
     unpipe()
     socket.close()
   }
 
-  const pipe = function(destination) {
+  const pipe = function (destination) {
     subscribe('data', destination.write)
     return destination
   }
 
-  const unpipe = function(destination) {
+  const unpipe = function (destination) {
     unsubscribe('data', destination ? destination.write : undefined)
   }
 
 
-  const recognizeStop = function() {
+  const recognizeStop = function () {
     const state = fsm.getCurrentState()
-    if(state && state.recognizeStop)
+    if (state && state.recognizeStop)
       state.recognizeStop()
   }
 
-  const recognizeStart = function(token) {
+  const recognizeStart = function (token) {
     const state = fsm.getCurrentState()
-    if(state && state.recognizeStart)
+    if (state && state.recognizeStart)
       state.recognizeStart(token)
   }
 
   // forward audio data to the watson stt backend
-  const write = function(data) {
+  const write = function (data) {
     // if watson receives a 0 length message the recognize event is stopped, so
     // ensure we're sending at least some data to prevent accidental closure if
     // data source stalls or fully drains.
-    if(data.byteLength === 0)
+    if (data.byteLength === 0)
       return
 
     const state = fsm.getCurrentState()
-    if(state && state.write)
+    if (state && state.write)
       state.write(data)
   }
 
-  const _initSocket = async function(token) {
-    return new Promise(function(resolve, reject) {
+  const _initSocket = async function (token) {
+    return new Promise(function (resolve, reject) {
       const queryString = stringify({ model: 'en-US_BroadbandModel', 'watson-token': token })
       const wsURI = `wss://stream.watsonplatform.net/speech-to-text/api/v1/recognize?${queryString}`
       try {
@@ -1348,14 +1347,13 @@ module.exports = function watsonSpeechToText(options={}) {
         socket.onopen = resolve
         socket.onerror = reject
 
-        socket.onmessage = function(data) {
+        socket.onmessage = function (data) {
           const state = fsm.getCurrentState()
           const message = JSON.parse(data.data)
-          if(state && state.onmessage) {
+          if (state && state.onmessage)
             state.onmessage(message)
-          }
         }
-        socket.onclose = function(code) {
+        socket.onclose = function (code) {
           fsm.setState('stopped')
           socket = undefined
         }
@@ -1365,11 +1363,11 @@ module.exports = function watsonSpeechToText(options={}) {
     })
   }
 
-  const _isOpen = function() {
+  const _isOpen = function () {
     return socket && socket.readyState === socket.OPEN
   }
 
-  const _send = function(data) {
+  const _send = function (data) {
     if (_isOpen())
       socket.send(data)
   }
@@ -1408,14 +1406,14 @@ module.exports = function(self) {
     clearBuffer()
   }
 
-  const floatTo16BitPCM = function floatTo16BitPCM(input, output) {
+  const floatTo16BitPCM = function floatTo16BitPCM (input, output) {
     for (let i = 0; i < input.length; i++) {
       let s = Math.max(-1, Math.min(1, input[i]))
       output[i] = (s < 0 ? s * 0x8000 : s * 0x7FFF)
     }
   }
 
-  const convertBuffer = function(arrayBuffer) {
+  const convertBuffer = function (arrayBuffer) {
     const data = new Float32Array(arrayBuffer)
     let out = new Int16Array(arrayBuffer.length)
     floatTo16BitPCM(data, out)
@@ -1441,10 +1439,10 @@ module.exports = function(self) {
     clearBuffer()
   }
 
-  self.addEventListener('message', function(e) {
+  self.addEventListener('message', function (e) {
     if (e.data.topic === 'data')
       encode(e.data.buf)
-    else if(e.data.topic === 'init')
+    else if (e.data.topic === 'init')
       init({ sampleRate: e.data.sampleRate, bitRate: e.data.bitRate, lameUrl: e.data.lameUrl })
     else if (e.data.topic === 'finish')
       finish()
@@ -1461,7 +1459,7 @@ const workify = require('webworkify')
 // take in a MediaStreamAudioSourceNode instance and generate mp3 audio,
 // downsampling in the process. internally uses a web worker to offload
 // CPU intensive work to another thread.
-module.exports = function webAudioMp3Stream(options={}) {
+module.exports = function webAudioMp3Stream (options={}) {
   const { sampleRate } = options
 
   const lameUrl = options.lameUrl || (document.location.origin + '/js/lame.min.js')
@@ -1476,23 +1474,23 @@ module.exports = function webAudioMp3Stream(options={}) {
   //const encoder = new Worker('/js/encoder-worker.js')
 
   encoder.addEventListener('message', function (ev) {
-    if(ev.data.cmd === 'data')
+    if (ev.data.cmd === 'data')
       publish('data', ev.data.buf)
   })
 
   // <= 32 kbps mp3 encoding doesn't seem to encode properly on android or ios
   encoder.postMessage({ topic: 'init', sampleRate, bitRate: 64, lameUrl })
 
-  const pipe = function(destination) {
+  const pipe = function (destination) {
     subscribe('data', destination.write)
     return destination
   }
 
-  const unpipe = function(destination) {
+  const unpipe = function (destination) {
     unsubscribe('data', destination ? destination.write : undefined)
   }
 
-  const write = function(buf) {
+  const write = function (buf) {
     encoder.postMessage({ topic: 'data', buf })
   }
 
@@ -5269,7 +5267,7 @@ const pubsub      = require('ev-pubsub')
 const toEntry     = require('./lib/convert-cached-audio-to-entry')
 
 
-module.exports = async function audioStorage(options={}) {
+module.exports = async function audioStorage (options={}) {
   const { objectPrefix } = options
   const { subscribe, unsubscribe } = pubsub()
 
@@ -5278,10 +5276,10 @@ module.exports = async function audioStorage(options={}) {
 
   // @param uuid  v4 uuid of recording
   // @param meta  optional object containing custom metadata
-  const createRecording = async function(uuid, meta={}) {
+  const createRecording = async function (uuid, meta={}) {
     currentRecording = await getRecording(uuid)
 
-    if(currentRecording)
+    if (currentRecording)
       throw new Error('could not create new recording: ' + uuid + ' already exists in storage')
 
     currentRecording = {
@@ -5299,16 +5297,16 @@ module.exports = async function audioStorage(options={}) {
 
 
   // remove all segments from the current recording
-  const clearSegments = function() {
-    if(!currentRecording)
+  const clearSegments = function () {
+    if (!currentRecording)
       return
 
     currentRecording.segments.length = 0
   }
 
 
-  const createSegment = function() {
-    if(!currentRecording)
+  const createSegment = function () {
+    if (!currentRecording)
       return
 
     currentSegment = {
@@ -5320,17 +5318,17 @@ module.exports = async function audioStorage(options={}) {
   }
 
 
-  const editMetadata = async function(audioId, meta) {
+  const editMetadata = async function (audioId, meta) {
     const recording = await getRecording(audioId)
-    if(recording) {
+    if (recording) {
       recording.meta.custom = meta
       await localforage.setItem(`${objectPrefix}-${recording.uuid}`, recording)
     }
   }
 
 
-  const finalizeRecording = async function() {
-    if(!currentRecording)
+  const finalizeRecording = async function () {
+    if (!currentRecording)
       return
 
     // TODO: approximate duration from byte length
@@ -5343,46 +5341,46 @@ module.exports = async function audioStorage(options={}) {
   }
 
 
-  const getAllRecordings = async function() {
+  const getAllRecordings = async function () {
     const list = await listRecordings()
-    const pile = []
-    list.forEach(function(audioId) {
+    const pile = [ ]
+    list.forEach(function (audioId) {
       pile.push(getRecording(audioId))
     })
     return Promise.all(pile)
   }
 
 
-  const getFinalizedRecordings = async function() {
+  const getFinalizedRecordings = async function () {
     const list = await listRecordings()
-    const pile = []
-    for(let i=0; i < list.length; i++) {
+    const pile = [ ]
+    for (let i=0; i < list.length; i++) {
       let audioId = list[i]
       let entry = await getRecording(audioId)
-      if(entry.meta.finalized)
+      if (entry.meta.finalized)
         pile.push(toEntry(entry))
     }
     return pile
   }
 
 
-  const getRecording = async function(uuid) {
+  const getRecording = async function (uuid) {
     const key = uuid.indexOf(objectPrefix) === 0 ? uuid : `${objectPrefix}-${uuid}`
     return localforage.getItem(key)
   }
 
 
-  const listRecordings = async function() {
+  const listRecordings = async function () {
     const keys = await localforage.keys()
-    return keys.filter(function(k) {
+    return keys.filter(function (k) {
       return k.indexOf(objectPrefix) === 0
     })
   }
 
 
-  const markUploaded = async function(audioId) {
+  const markUploaded = async function (audioId) {
     const recording = await getRecording(audioId)
-    if(recording) {
+    if (recording) {
       recording.meta.syncedToServer = true
       await localforage.setItem(`${objectPrefix}-${recording.uuid}`, recording)
     }
@@ -5390,31 +5388,31 @@ module.exports = async function audioStorage(options={}) {
 
 
   // removes recording from local cache
-  const removeRecording = async function(audioId) {
+  const removeRecording = async function (audioId) {
     return localforage.removeItem(`${objectPrefix}-${audioId}`)
   }
 
 
-  const setSegmentTranscription = function(transcription) {
-    if(currentSegment)
+  const setSegmentTranscription = function (transcription) {
+    if (currentSegment)
       currentSegment.transcription = transcription
   }
 
 
-  const pipe = function(destination) {
+  const pipe = function (destination) {
     subscribe('data', destination.write)
     return destination
   }
 
 
-  const unpipe = function(destination) {
+  const unpipe = function (destination) {
     unsubscribe('data', destination ? destination.write : undefined)
   }
 
 
   // send audio data to the current segement
-  const write = function(data) {
-    if(currentSegment && data.byteLength)
+  const write = function (data) {
+    if (currentSegment && data.byteLength)
       currentSegment.data.push(data)
   }
 
@@ -5422,7 +5420,7 @@ module.exports = async function audioStorage(options={}) {
   localforage.setDriver(localforage.INDEXEDDB)
   await localforage.ready()
 
-  if(localforage.INDEXEDDB !== localforage.driver())
+  if (localforage.INDEXEDDB !== localforage.driver())
     throw new Error('failed to run demo. could not use INDEXEDDB driver.')
 
   // remove everything from localforage. shouldn't be enabled in production EVER

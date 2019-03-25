@@ -36,19 +36,19 @@ finite state machine for speechinput widget. initial state: IDLE
         └-------------------------┘
 */
 
-function appendItem() {
+function appendItem () {
   const item = document.createElement('p')
   item.classList.add('me-text')
   return item
 }
 
-module.exports = function speechInput(options={}) {
+module.exports = function speechInput (options={}) {
   const { key, secret } = options
 
-  if(!key)
+  if (!key)
     throw new Error('You must specify an API key')
 
-  if(!secret)
+  if (!secret)
     throw new Error('You must specify an API secret')
 
   const apiHost = 'https://audio.voiceco.ai'
@@ -92,14 +92,14 @@ module.exports = function speechInput(options={}) {
   const speech = watsonSTT({ interim_results: true, smart_formatting: true })
 
   const recordButton = dom.querySelector('button.record')
-  press.once(recordButton, function(ev) {
+  press.once(recordButton, function (ev) {
     mic = micStream()
     mp3Encoder = mp3Stream({ sampleRate: mic.sampleRate })
   })
 
 
   fsm.addState('idle', {
-    enter: function(er) {
+    enter: function (er) {
       if (er) {
         recordLabel.hide()
         statusLabel.innerText = er
@@ -109,7 +109,7 @@ module.exports = function speechInput(options={}) {
       output.innerText = ''
       const button = select('button.record')
       button.innerText = '●'
-      button.onclick = function(ev) {
+      button.onclick = function (ev) {
         button.setAttribute('disabled', true)
         fsm.setState('setup-recording')
       }
@@ -120,20 +120,20 @@ module.exports = function speechInput(options={}) {
         'button.record': false
       })
     },
-    exit: function() {
+    exit: function () {
       statusLabel.innerText = ''
       statusLabel.style.display = 'none'
     }
   })
 
-  const select = function(str) {
+  const select = function (str) {
     return dom.querySelector(str)
   }
 
   // key is button selector, value is disabled bool
-  const setButtonDisabledStates = function(states) {
-    Object.keys(states).forEach(function(selector) {
-      if(states[selector])
+  const setButtonDisabledStates = function (states) {
+    Object.keys(states).forEach(function (selector) {
+      if (states[selector])
         select(selector).setAttribute('disabled', true)
       else
         select(selector).removeAttribute('disabled')
@@ -141,7 +141,7 @@ module.exports = function speechInput(options={}) {
   }
 
   fsm.addState('offline', {
-    enter: function() {
+    enter: function () {
       setButtonDisabledStates({
         'button.re-record': true,
         'button.done': true,
@@ -151,7 +151,7 @@ module.exports = function speechInput(options={}) {
   })
 
   fsm.addState('setup-recording', {
-    enter: async function() {
+    enter: async function () {
       setButtonDisabledStates({
         'button.re-record': true,
         'button.done': true,
@@ -169,16 +169,16 @@ module.exports = function speechInput(options={}) {
     }
   })
 
-  const recordingState = function() {
+  const recordingState = function () {
     let sttResultStream, currentItem
 
-    const _visibilityChanged = function() {
+    const _visibilityChanged = function () {
       // when the page is hidden, pause recording
-      if(document.hidden)
+      if (document.hidden)
         fsm.setState('paused')
     }
 
-    const enter = async function() {
+    const enter = async function () {
       document.addEventListener('visibilitychange', _visibilityChanged)
 
       currentItem = appendItem()
@@ -187,7 +187,7 @@ module.exports = function speechInput(options={}) {
       recordButton.innerText = '⏸'
 
       sttResultStream = resultStream()
-      sttResultStream.subscribe('data', function _receiveSTTResults(data) {
+      sttResultStream.subscribe('data', function _receiveSTTResults (data) {
         currentItem.innerText = data
         //window.scrollTo(0, document.body.scrollHeight)
         //output.style.height = dom.clientHeight - 100 + 'px'
@@ -195,7 +195,7 @@ module.exports = function speechInput(options={}) {
         //dom.parentNode.scrollTop = dom.parentNode.scrollHeight
       })
 
-      speech.subscribe('error', function(er) {
+      speech.subscribe('error', function (er) {
         fsm.setState('idle', er)
       })
 
@@ -209,15 +209,15 @@ module.exports = function speechInput(options={}) {
         .pipe(speech)
         .pipe(sttResultStream)
 
-      select('button.record').onclick = function(ev) {
+      select('button.record').onclick = function (ev) {
         fsm.setState('paused')
       }
 
-      select('button.re-record').onclick = function(ev) {
+      select('button.re-record').onclick = function (ev) {
         fsm.setState('clearing')
       }
 
-      select('button.done').onclick = function(ev) {
+      select('button.done').onclick = function (ev) {
         fsm.setState('finalizing')
       }
 
@@ -230,7 +230,7 @@ module.exports = function speechInput(options={}) {
       recordLabel.show()
     }
 
-    const exit = function() {
+    const exit = function () {
       storage.setSegmentTranscription(currentItem.innerText)
       document.removeEventListener('visibilitychange', _visibilityChanged)
       sttResultStream.unsubscribe('data')
@@ -250,16 +250,16 @@ module.exports = function speechInput(options={}) {
   fsm.addState('recording', recordingState())
 
   fsm.addState('paused', {
-    enter: function() {
-      select('button.record').onclick = function(ev) {
+    enter: function () {
+      select('button.record').onclick = function (ev) {
         fsm.setState('setup-recording')
       }
 
-      select('button.re-record').onclick =  function(ev) {
+      select('button.re-record').onclick =  function (ev) {
         fsm.setState('clearing')
       }
 
-      select('button.done').onclick = function(ev) {
+      select('button.done').onclick = function (ev) {
         fsm.setState('finalizing')
       }
 
@@ -278,7 +278,7 @@ module.exports = function speechInput(options={}) {
   })
 
   fsm.addState('clearing', {
-    enter: function() {
+    enter: function () {
       setButtonDisabledStates({
         'button.re-record': true,
         'button.done': true,
@@ -291,42 +291,42 @@ module.exports = function speechInput(options={}) {
   })
 
   fsm.addState('finalizing', {
-    enter: function() {
-      if(transcriptionPromise.resolve)
+    enter: function () {
+      if (transcriptionPromise.resolve)
         transcriptionPromise.resolve(output.innerText)
       fsm.setState('idle')
     }
   })
 
-  window.addEventListener('offline', function offline() {
+  window.addEventListener('offline', function offline () {
     fsm.setState('offline')
   })
 
-  window.addEventListener('online', function offline() {
-    if(output.innerText.length)
+  window.addEventListener('online', function offline () {
+    if (output.innerText.length)
       fsm.setState('paused')
     else
       fsm.setState('idle')
   })
 
-  const cancel = function() {
+  const cancel = function () {
     pause()
     dom.style.opacity = 0
     transcriptionPromise.resolve = undefined
     transcriptionPromise.rej = undefined
   }
 
-  const pause = function() {
+  const pause = function () {
     fsm.setState('paused')
   }
 
-  const transcribe = async function(userMeta={}) {
-    if(!storage)
+  const transcribe = async function (userMeta={}) {
+    if (!storage)
       storage = await audioStorage({ objectPrefix })
 
     //output.style.height = dom.clientHeight - 100 + 'px'
 
-    if(transcriptionPromise.resolve)
+    if (transcriptionPromise.resolve)
       throw new Error('cannot transcribe more than 1 audio at a time')
 
     const uuid = uuidV4()
@@ -334,7 +334,7 @@ module.exports = function speechInput(options={}) {
     fsm.setState('idle')
     dom.style.opacity = 1
 
-    const text = await new Promise(function(res, rej) {
+    const text = await new Promise(function (res, rej) {
       transcriptionPromise.resolve = res
       transcriptionPromise.rej = rej
     })
