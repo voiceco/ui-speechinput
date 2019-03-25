@@ -1,4 +1,4 @@
-(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 'use strict'
 
 const speech = require('../index')
@@ -559,7 +559,7 @@ module.exports = function speechInput(options={}) {
   return Object.freeze({ cancel, dom, pause, transcribe })
 }
 
-},{"./lib/finite-state-machine":5,"./lib/press":6,"./lib/stream-microphone":7,"./lib/sync-manager":8,"./lib/ui-recordinglabel":10,"./lib/watson-get-token":11,"./lib/watson-stt":13,"./lib/watson-stt-result-stream":12,"./lib/webaudio-mp3-stream":15,"./storage":29,"uuid/v4":27}],4:[function(require,module,exports){
+},{"./lib/finite-state-machine":5,"./lib/press":6,"./lib/stream-microphone":7,"./lib/sync-manager":8,"./lib/ui-recordinglabel":10,"./lib/watson-get-token":11,"./lib/watson-stt":13,"./lib/watson-stt-result-stream":12,"./lib/webaudio-mp3-stream":15,"./storage":27,"uuid/v4":25}],4:[function(require,module,exports){
 'use strict'
 
 module.exports = function convertCachedAudioToEntry (entry) {
@@ -587,20 +587,19 @@ module.exports = function convertCachedAudioToEntry (entry) {
 },{}],5:[function(require,module,exports){
 'use strict'
 
-module.exports = function fsm(options={}) {
-  const { verbose } = options
-  const states = {}
+module.exports = function fsm ({ verbose } = { }) {
+  const states = { }
   let currentState
 
-  const addState = function(stateName, state) {
+  const addState = function (stateName, state) {
     states[stateName] = state
   }
 
-  const getCurrentState = function() {
+  const getCurrentState = function () {
     return states[currentState]
   }
 
-  const setState = async function(stateName, ...args) {
+  const setState = async function (stateName, ...args) {
     if (stateName === currentState)
       return // already in the state
 
@@ -610,14 +609,14 @@ module.exports = function fsm(options={}) {
     if (currentState) {
       if (verbose)
         console.log('exiting state', currentState)
-      if(states[currentState].exit)
+      if (states[currentState].exit)
         await states[currentState].exit()
     }
 
     if (verbose)
       console.log('entering state', stateName)
     currentState = stateName
-    if(states[currentState].enter)
+    if (states[currentState].enter)
       await states[currentState].enter(...args)
   }
 
@@ -671,11 +670,10 @@ module.exports = {
   }
 }
 
-},{"is-touch":19}],7:[function(require,module,exports){
+},{"is-touch":18}],7:[function(require,module,exports){
 'use strict'
 
-const getUserMedia = require('get-user-media-promise')
-const pubsub       = require('ev-pubsub')
+const pubsub = require('ev-pubsub')
 
 
 // GOTCHA: this object should be constructed as the result of a user gesture.
@@ -683,7 +681,7 @@ const pubsub       = require('ev-pubsub')
 // something particularly insidious about this issue is it won't throw any visible javascript errors.
 // the underlying audiocontext will simply remain in a paused state, and you'll see data flow into the
 // scriptprocessor object, but with all 0's for data. brutal!
-module.exports = function microphoneStream() {
+module.exports = function microphoneStream () {
   const { publish, subscribe, unsubscribe } = pubsub()
 
   let mediaStream, source
@@ -706,7 +704,7 @@ module.exports = function microphoneStream() {
   const scriptNode = audioContext.createScriptProcessor(bufferSize, inputChannels, outputChannels)
 
   // https://developer.mozilla.org/en-US/docs/Web/API/ScriptProcessorNode
-  scriptNode.onaudioprocess = function _recorderProcess(e) {
+  scriptNode.onaudioprocess = function _recorderProcess (e) {
     // GOTCHA: onaudioprocess can be called at least once after we've stopped.
     //if (!recording) return
 
@@ -715,51 +713,34 @@ module.exports = function microphoneStream() {
   }
 
 
-  const getMediaStream = function() {
+  const getMediaStream = function () {
     return mediaStream
   }
 
 
-  const pipe = function(destination) {
+  const pipe = function (destination) {
     subscribe('data', destination.write)
     return destination
   }
 
-  const unpipe = function(destination) {
+  const unpipe = function (destination) {
     unsubscribe('data', destination ? destination.write : undefined)
   }
 
   // you don't need to call this from a user gesture; it will work fine in mobile contexts
   // as long as this object was constructed from a user gesture
-  const start = async function() {
-    if(mediaStream)
+  const start = async function () {
+    if (mediaStream)
       return
 
-    const opts = {
-      audio: {
-        mandatory: {
-          echoCancellation: false,
-          googEchoCancellation: false,
-          googAutoGainControl: false,
-          googAutoGainControl2: false,
-          googNoiseSuppression: false,
-          googHighpassFilter: false,
-          googTypingNoiseDetection: false
-        },
-        optional: []
-      },
-      video: false
-    }
-    //const opts = { audio,: true, video: false }
-
-    mediaStream = await getUserMedia(opts)
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
     source = audioContext.createMediaStreamSource(mediaStream)
     source.connect(scriptNode)
     scriptNode.connect(audioContext.destination)
   }
 
-  const stop = function() {
-    if(!mediaStream || audioContext.state === 'closed')
+  const stop = function () {
+    if (!mediaStream || audioContext.state === 'closed')
       return
 
     try {
@@ -770,7 +751,7 @@ module.exports = function microphoneStream() {
     }
 
     scriptNode.disconnect()
-    if(source)
+    if (source)
       source.disconnect()
 
     // don't close the audio context, we'll need this when recording multiple times in a session
@@ -787,7 +768,7 @@ module.exports = function microphoneStream() {
   return Object.freeze({ getMediaStream, pipe, unpipe, start, stop, sampleRate: audioContext.sampleRate })
 }
 
-},{"ev-pubsub":16,"get-user-media-promise":17}],8:[function(require,module,exports){
+},{"ev-pubsub":16}],8:[function(require,module,exports){
 'use strict'
 
 const fsmFactory = require('../finite-state-machine')
@@ -877,7 +858,7 @@ module.exports = function syncManager (options={}) {
   fsm.setState('IDLE')
 }
 
-},{"../finite-state-machine":5,"./sync-worker":9,"lockable-storage":21,"webworkify":28}],9:[function(require,module,exports){
+},{"../finite-state-machine":5,"./sync-worker":9,"lockable-storage":20,"webworkify":26}],9:[function(require,module,exports){
 'use strict'
 
 const storage = require('../../storage')
@@ -994,7 +975,7 @@ module.exports = function(self) {
   })
 }
 
-},{"../../storage":29}],10:[function(require,module,exports){
+},{"../../storage":27}],10:[function(require,module,exports){
 'use strict'
 
 module.exports = function recordingLabel(dom) {
@@ -1398,7 +1379,7 @@ module.exports = function watsonSpeechToText(options={}) {
   return Object.freeze({ close, pipe, recognizeStart, recognizeStop, unpipe, subscribe, unsubscribe, write })
 }
 
-},{"./finite-state-machine":5,"ev-pubsub":16,"lodash.pick":22}],14:[function(require,module,exports){
+},{"./finite-state-machine":5,"ev-pubsub":16,"lodash.pick":21}],14:[function(require,module,exports){
 'use strict'
 
 //const lamejs = require('lamejs')
@@ -1518,200 +1499,92 @@ module.exports = function webAudioMp3Stream(options={}) {
   return Object.freeze({ pipe, unpipe, write })
 }
 
-},{"./encoder-worker":14,"ev-pubsub":16,"webworkify":28}],16:[function(require,module,exports){
-'use strict'
+},{"./encoder-worker":14,"ev-pubsub":16,"webworkify":26}],16:[function(require,module,exports){
+'use strict';
 
-const nextTick    = require('next-tick-2')
-const removeItems = require('remove-array-items')
+function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+
+var removeItems = _interopDefault(require('remove-array-items'));
+
+function pubsub () {
+  const _listeners = {}, _onceListeners = {};
 
 
-// very simple publish/subcribe system
-module.exports = function pubsub() {
-  const _listeners = {}
+  const once = function (topic, handler) {
+    if (!_onceListeners[topic])
+      _onceListeners[topic] = [];
 
-  const _onceListeners = {}
+    _onceListeners[topic].push(handler);
+  };
 
-  let once = function(topic, handler) {
-    if (!_onceListeners[topic]) _onceListeners[topic] = []
 
-    _onceListeners[topic].push(handler)
-  }
-
-  let publish = function(topic, ...args) {
+  const publish = function (topic, ...args) {
     // execute these in the next process tick rather than synchronously. this
     // enables subscribing to topics after publishing and not missing events
     // that are published before subscribing in the same event loop
-    nextTick(function() {
-      if(_listeners[topic]) {
-        for(let i=0; i < _listeners[topic].length; i++) {
-          _listeners[topic][i](...args)
+    setTimeout(function () {
+      if (_listeners[topic]) {
+        for (let i=0; i < _listeners[topic].length; i++) {
+          _listeners[topic][i](...args);
         }
       }
 
-      if(_onceListeners[topic]) {
-        for(let i=_onceListeners[topic].length-1; i >= 0; i--) {
-          _onceListeners[topic][i](...args)
-          removeItems(_onceListeners[topic], i, 1)
+      if (_onceListeners[topic]) {
+        for (let i=_onceListeners[topic].length-1; i >= 0; i--) {
+          _onceListeners[topic][i](...args);
+          removeItems(_onceListeners[topic], i, 1);
         }
       }
-    })
-  }
+    }, 0);
+  };
 
-  let subscribe = function(topic, handler) {
-    if (!_listeners[topic]) _listeners[topic] = []
+
+  const subscribe = function (topic, handler) {
+    if (!_listeners[topic])
+      _listeners[topic] = [];
 
     // if a function is registered for a topic more than once, likely a bug
-    if(_alreadySubscribed(topic, handler)) {
-      console.warn('double adding handler for topic:', topic, ' handler:', handler, 'perhaps this is a bug?')
-    }
+    if (_alreadySubscribed(topic, handler))
+      console.warn('double adding handler for topic:', topic, ' handler:', handler, 'perhaps this is a bug?');
 
-    _listeners[topic].push(handler)
-  }
+    _listeners[topic].push(handler);
+  };
+
 
   // @param function handler if ommitted, remove all handlers for this topic
-  let unsubscribe = function(topic, handler) {
+  const unsubscribe = function (topic, handler) {
     if (_listeners[topic]) {
       if (!handler) {
-        _listeners[topic] = []
+        _listeners[topic] = [];
         return
       }
-      for(let i=0; i < _listeners[topic].length; i++) {
+      for (let i=0; i < _listeners[topic].length; i++) {
         if (_listeners[topic][i] === handler) {
-          removeItems(_listeners[topic], i, 1)
+          removeItems(_listeners[topic], i, 1);
           return
         }
       }
     }
-  }
+  };
 
-  let _alreadySubscribed = function(topic, handler) {
+
+  const _alreadySubscribed = function (topic, handler) {
     if (!_listeners[topic]) return false
 
-    for(let i=0; i < _listeners[topic].length; i++) {
+    for (let i=0; i < _listeners[topic].length; i++)
       if (_listeners[topic][i] === handler)
-      {
         return true
-      }
-    }
 
     return false
-  }
+  };
+
 
   return Object.freeze({ publish, subscribe, unsubscribe, once })
 }
 
-},{"next-tick-2":23,"remove-array-items":24}],17:[function(require,module,exports){
-// loosely based on example code at https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
-(function (root) {
-  'use strict';
+module.exports = pubsub;
 
-  /**
-   * Error thrown when any required feature is missing (Promises, navigator, getUserMedia)
-   * @constructor
-   */
-  function NotSupportedError() {
-    this.name = 'NotSupportedError';
-    this.message = 'getUserMedia is not implemented in this browser';
-  }
-  NotSupportedError.prototype = Error.prototype;
-
-  /**
-   * Fake Promise instance that behaves like a Promise except that it always rejects with a NotSupportedError.
-   * Used for situations where there is no global Promise constructor.
-   *
-   * The message will report that the getUserMedia API is not available.
-   * This is technically true because every browser that supports getUserMedia also supports promises.
-   **
-   * @see http://caniuse.com/#feat=stream
-   * @see http://caniuse.com/#feat=promises
-   * @constructor
-   */
-  function FakePromise() {
-    // make it chainable like a real promise
-    this.then = function() {
-      return this;
-    };
-
-    // but always reject with an error
-    var err = new NotSupportedError();
-    this.catch = function(cb) {
-      setTimeout(function () {
-        cb(err);
-      });
-    }
-  }
-
-  var isPromiseSupported = typeof Promise !== 'undefined';
-
-  // checks for root.navigator to enable server-side rendering of things that depend on this
-  // (will need to be updated on client, but at least doesn't throw this way)
-  var navigatorExists = typeof navigator !== "undefined";
-  // gump = mondern promise-based interface
-  // gum = old callback-based interface
-  var gump = navigatorExists && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
-  var gum = navigatorExists && (navigator.getUserMedia || navigator.webkitGetUserMedia ||  navigator.mozGetUserMedia || navigator.msGetUserMedia);
-
-  /**
-   * Wrapper for navigator.mediaDevices.getUserMedia.
-   * Always returns a Promise or Promise-like object, even in environments without a global Promise constructor
-   *
-   * @stream https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
-   *
-   * @param {Object} constraints - must include one or both of audio/video along with optional details for video
-   * @param {Boolean} [constraints.audio] - include audio data in the stream
-   * @param {Boolean|Object} [constraints.video] - include video data in the stream. May be a boolean or an object with additional constraints, see
-   * @returns {Promise<MediaStream>} a promise that resolves to a MediaStream object
-     */
-  function getUserMedia(constraints) {
-    // ensure that Promises are supported and we have a navigator object
-    if (!isPromiseSupported) {
-      return new FakePromise();
-    }
-
-    // Try the more modern, promise-based MediaDevices API first
-    //https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
-    if(gump) {
-      return navigator.mediaDevices.getUserMedia(constraints);
-    }
-
-    // fall back to the older method second, wrap it in a promise.
-    return new Promise(function(resolve, reject) {
-      // if navigator doesn't exist, then we can't use the getUserMedia API. (And probably aren't even in a browser.)
-      // assuming it does, try getUserMedia and then all of the prefixed versions
-
-      if (!gum) {
-        return reject(new NotSupportedError())
-      }
-      gum.call(navigator, constraints, resolve, reject);
-    });
-  }
-
-  getUserMedia.NotSupportedError = NotSupportedError;
-
-  // eslint-disable-next-line no-implicit-coercion
-  getUserMedia.isSupported = !!(isPromiseSupported && (gump || gum));
-
-  // UMD, loosely based on https://github.com/umdjs/umd/blob/master/templates/returnExportsGlobal.js
-  if (typeof define === 'function' && define.amd) {
-    // AMD. Register as an anonymous module.
-    define([], function () {
-      return getUserMedia;
-    });
-  } else if (typeof module === 'object' && module.exports) {
-    // Node. Does not work with strict CommonJS, but
-    // only CommonJS-like enviroments that support module.exports,
-    // like Node.
-    module.exports = getUserMedia;
-  } else {
-    // Browser globals
-    // polyfill the MediaDevices API if it does not exist.
-    root.navigator = root.navigator || {};
-    root.nagivator.mediaDevices = root.navigator.mediaDevices || {};
-    root.nagivator.mediaDevices.getUserMedia = root.nagivator.mediaDevices.getUserMedia || getUserMedia;
-  }
-}(this));
-
-},{}],18:[function(require,module,exports){
+},{"remove-array-items":22}],17:[function(require,module,exports){
 (function (process){
 // Coding standard for this project defined @ https://github.com/MatthewSH/standards/blob/master/JavaScript.md
 'use strict';
@@ -1719,7 +1592,7 @@ module.exports = function pubsub() {
 exports = module.exports = !!(typeof process !== 'undefined' && process.versions && process.versions.node);
 
 }).call(this,require('_process'))
-},{"_process":2}],19:[function(require,module,exports){
+},{"_process":2}],18:[function(require,module,exports){
 (function (global){
 'use strict'
 var isNode = require('is-node')
@@ -1736,11 +1609,11 @@ module.exports = isNode
     false
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"is-node":18}],20:[function(require,module,exports){
+},{"is-node":17}],19:[function(require,module,exports){
 (function (global){
 /*!
     localForage -- Offline Storage, Improved
-    Version 1.5.5
+    Version 1.7.3
     https://localforage.github.io/localForage
     (c) 2013-2017 Mozilla, Apache License 2.0
 */
@@ -1830,7 +1703,7 @@ var REJECTED = ['REJECTED'];
 var FULFILLED = ['FULFILLED'];
 var PENDING = ['PENDING'];
 
-module.exports = exports = Promise;
+module.exports = Promise;
 
 function Promise(resolver) {
   if (typeof resolver !== 'function') {
@@ -1936,7 +1809,7 @@ handlers.reject = function (self, error) {
 function getThen(obj) {
   // Make sure we only access the accessor once as required by the spec
   var then = obj && obj.then;
-  if (obj && typeof obj === 'object' && typeof then === 'function') {
+  if (obj && (typeof obj === 'object' || typeof obj === 'function') && typeof then === 'function') {
     return function appyThen() {
       then.apply(obj, arguments);
     };
@@ -1984,7 +1857,7 @@ function tryCatch(func, value) {
   return out;
 }
 
-exports.resolve = resolve;
+Promise.resolve = resolve;
 function resolve(value) {
   if (value instanceof this) {
     return value;
@@ -1992,13 +1865,13 @@ function resolve(value) {
   return handlers.resolve(new this(INTERNAL), value);
 }
 
-exports.reject = reject;
+Promise.reject = reject;
 function reject(reason) {
   var promise = new this(INTERNAL);
   return handlers.reject(promise, reason);
 }
 
-exports.all = all;
+Promise.all = all;
 function all(iterable) {
   var self = this;
   if (Object.prototype.toString.call(iterable) !== '[object Array]') {
@@ -2037,7 +1910,7 @@ function all(iterable) {
   }
 }
 
-exports.race = race;
+Promise.race = race;
 function race(iterable) {
   var self = this;
   if (Object.prototype.toString.call(iterable) !== '[object Array]') {
@@ -2204,12 +2077,18 @@ function normalizeKey(key) {
     return key;
 }
 
+function getCallback() {
+    if (arguments.length && typeof arguments[arguments.length - 1] === 'function') {
+        return arguments[arguments.length - 1];
+    }
+}
+
 // Some code originally from async_storage.js in
 // [Gaia](https://github.com/mozilla-b2g/gaia).
 
 var DETECT_BLOB_SUPPORT_STORE = 'local-forage-detect-blob-support';
-var supportsBlobs;
-var dbContexts;
+var supportsBlobs = void 0;
+var dbContexts = {};
 var toString = Object.prototype.toString;
 
 // Transaction Modes
@@ -2288,8 +2167,9 @@ function _deferReadiness(dbInfo) {
     // Create a deferred object representing the current database operation.
     var deferredOperation = {};
 
-    deferredOperation.promise = new Promise$1(function (resolve) {
+    deferredOperation.promise = new Promise$1(function (resolve, reject) {
         deferredOperation.resolve = resolve;
+        deferredOperation.reject = reject;
     });
 
     // Enqueue the deferred operation.
@@ -2315,6 +2195,7 @@ function _advanceReadiness(dbInfo) {
     // chain of promises).
     if (deferredOperation) {
         deferredOperation.resolve();
+        return deferredOperation.promise;
     }
 }
 
@@ -2328,11 +2209,13 @@ function _rejectReadiness(dbInfo, err) {
     // chain of promises).
     if (deferredOperation) {
         deferredOperation.reject(err);
+        return deferredOperation.promise;
     }
 }
 
 function _getConnection(dbInfo, upgradeNeeded) {
     return new Promise$1(function (resolve, reject) {
+        dbContexts[dbInfo.name] = dbContexts[dbInfo.name] || createDbContext();
 
         if (dbInfo.db) {
             if (upgradeNeeded) {
@@ -2403,7 +2286,7 @@ function _isUpgradeNeeded(dbInfo, defaultVersion) {
         // If the version is not the default one
         // then warn for impossible downgrade.
         if (dbInfo.version !== defaultVersion) {
-            console.warn('The database "' + dbInfo.name + '"' + ' can\'t be downgraded from version ' + dbInfo.db.version + ' to version ' + dbInfo.version + '.');
+            console.warn('The database "' + dbInfo.name + '"' + " can't be downgraded from version " + dbInfo.db.version + ' to version ' + dbInfo.version + '.');
         }
         // Align the versions to prevent errors.
         dbInfo.version = dbInfo.db.version;
@@ -2483,15 +2366,27 @@ function _tryReconnect(dbInfo) {
     var forages = dbContext.forages;
 
     for (var i = 0; i < forages.length; i++) {
-        if (forages[i]._dbInfo.db) {
-            forages[i]._dbInfo.db.close();
-            forages[i]._dbInfo.db = null;
+        var forage = forages[i];
+        if (forage._dbInfo.db) {
+            forage._dbInfo.db.close();
+            forage._dbInfo.db = null;
         }
     }
+    dbInfo.db = null;
 
-    return _getConnection(dbInfo, false).then(function (db) {
-        for (var j = 0; j < forages.length; j++) {
-            forages[j]._dbInfo.db = db;
+    return _getOriginalConnection(dbInfo).then(function (db) {
+        dbInfo.db = db;
+        if (_isUpgradeNeeded(dbInfo)) {
+            // Reopen the database for upgrading.
+            return _getUpgradedConnection(dbInfo);
+        }
+        return db;
+    }).then(function (db) {
+        // store the latest db reference
+        // in case the db was upgraded
+        dbInfo.db = dbContext.db = db;
+        for (var i = 0; i < forages.length; i++) {
+            forages[i]._dbInfo.db = db;
         }
     })["catch"](function (err) {
         _rejectReadiness(dbInfo, err);
@@ -2501,21 +2396,47 @@ function _tryReconnect(dbInfo) {
 
 // FF doesn't like Promises (micro-tasks) and IDDB store operations,
 // so we have to do it with callbacks
-function createTransaction(dbInfo, mode, callback) {
+function createTransaction(dbInfo, mode, callback, retries) {
+    if (retries === undefined) {
+        retries = 1;
+    }
+
     try {
         var tx = dbInfo.db.transaction(dbInfo.storeName, mode);
         callback(null, tx);
     } catch (err) {
-        if (!dbInfo.db || err.name === 'InvalidStateError') {
-            return _tryReconnect(dbInfo).then(function () {
-
-                var tx = dbInfo.db.transaction(dbInfo.storeName, mode);
-                callback(null, tx);
-            });
+        if (retries > 0 && (!dbInfo.db || err.name === 'InvalidStateError' || err.name === 'NotFoundError')) {
+            return Promise$1.resolve().then(function () {
+                if (!dbInfo.db || err.name === 'NotFoundError' && !dbInfo.db.objectStoreNames.contains(dbInfo.storeName) && dbInfo.version <= dbInfo.db.version) {
+                    // increase the db version, to create the new ObjectStore
+                    if (dbInfo.db) {
+                        dbInfo.version = dbInfo.db.version + 1;
+                    }
+                    // Reopen the database for upgrading.
+                    return _getUpgradedConnection(dbInfo);
+                }
+            }).then(function () {
+                return _tryReconnect(dbInfo).then(function () {
+                    createTransaction(dbInfo, mode, callback, retries - 1);
+                });
+            })["catch"](callback);
         }
 
         callback(err);
     }
+}
+
+function createDbContext() {
+    return {
+        // Running localForages sharing a database.
+        forages: [],
+        // Shared database.
+        db: null,
+        // Database readiness (promise).
+        dbReady: null,
+        // Deferred operations on the database.
+        deferredOperations: []
+    };
 }
 
 // Open the IndexedDB database (automatically creates one if one didn't
@@ -2532,26 +2453,12 @@ function _initStorage(options) {
         }
     }
 
-    // Initialize a singleton container for all running localForages.
-    if (!dbContexts) {
-        dbContexts = {};
-    }
-
     // Get the current context of the database;
     var dbContext = dbContexts[dbInfo.name];
 
     // ...or create a new context.
     if (!dbContext) {
-        dbContext = {
-            // Running localForages sharing a database.
-            forages: [],
-            // Shared database.
-            db: null,
-            // Database readiness (promise).
-            dbReady: null,
-            // Deferred operations on the database.
-            deferredOperations: []
-        };
+        dbContext = createDbContext();
         // Register the new context in the global container.
         dbContexts[dbInfo.name] = dbContext;
     }
@@ -2985,6 +2892,137 @@ function keys(callback) {
     return promise;
 }
 
+function dropInstance(options, callback) {
+    callback = getCallback.apply(this, arguments);
+
+    var currentConfig = this.config();
+    options = typeof options !== 'function' && options || {};
+    if (!options.name) {
+        options.name = options.name || currentConfig.name;
+        options.storeName = options.storeName || currentConfig.storeName;
+    }
+
+    var self = this;
+    var promise;
+    if (!options.name) {
+        promise = Promise$1.reject('Invalid arguments');
+    } else {
+        var isCurrentDb = options.name === currentConfig.name && self._dbInfo.db;
+
+        var dbPromise = isCurrentDb ? Promise$1.resolve(self._dbInfo.db) : _getOriginalConnection(options).then(function (db) {
+            var dbContext = dbContexts[options.name];
+            var forages = dbContext.forages;
+            dbContext.db = db;
+            for (var i = 0; i < forages.length; i++) {
+                forages[i]._dbInfo.db = db;
+            }
+            return db;
+        });
+
+        if (!options.storeName) {
+            promise = dbPromise.then(function (db) {
+                _deferReadiness(options);
+
+                var dbContext = dbContexts[options.name];
+                var forages = dbContext.forages;
+
+                db.close();
+                for (var i = 0; i < forages.length; i++) {
+                    var forage = forages[i];
+                    forage._dbInfo.db = null;
+                }
+
+                var dropDBPromise = new Promise$1(function (resolve, reject) {
+                    var req = idb.deleteDatabase(options.name);
+
+                    req.onerror = req.onblocked = function (err) {
+                        var db = req.result;
+                        if (db) {
+                            db.close();
+                        }
+                        reject(err);
+                    };
+
+                    req.onsuccess = function () {
+                        var db = req.result;
+                        if (db) {
+                            db.close();
+                        }
+                        resolve(db);
+                    };
+                });
+
+                return dropDBPromise.then(function (db) {
+                    dbContext.db = db;
+                    for (var i = 0; i < forages.length; i++) {
+                        var _forage = forages[i];
+                        _advanceReadiness(_forage._dbInfo);
+                    }
+                })["catch"](function (err) {
+                    (_rejectReadiness(options, err) || Promise$1.resolve())["catch"](function () {});
+                    throw err;
+                });
+            });
+        } else {
+            promise = dbPromise.then(function (db) {
+                if (!db.objectStoreNames.contains(options.storeName)) {
+                    return;
+                }
+
+                var newVersion = db.version + 1;
+
+                _deferReadiness(options);
+
+                var dbContext = dbContexts[options.name];
+                var forages = dbContext.forages;
+
+                db.close();
+                for (var i = 0; i < forages.length; i++) {
+                    var forage = forages[i];
+                    forage._dbInfo.db = null;
+                    forage._dbInfo.version = newVersion;
+                }
+
+                var dropObjectPromise = new Promise$1(function (resolve, reject) {
+                    var req = idb.open(options.name, newVersion);
+
+                    req.onerror = function (err) {
+                        var db = req.result;
+                        db.close();
+                        reject(err);
+                    };
+
+                    req.onupgradeneeded = function () {
+                        var db = req.result;
+                        db.deleteObjectStore(options.storeName);
+                    };
+
+                    req.onsuccess = function () {
+                        var db = req.result;
+                        db.close();
+                        resolve(db);
+                    };
+                });
+
+                return dropObjectPromise.then(function (db) {
+                    dbContext.db = db;
+                    for (var j = 0; j < forages.length; j++) {
+                        var _forage2 = forages[j];
+                        _forage2._dbInfo.db = db;
+                        _advanceReadiness(_forage2._dbInfo);
+                    }
+                })["catch"](function (err) {
+                    (_rejectReadiness(options, err) || Promise$1.resolve())["catch"](function () {});
+                    throw err;
+                });
+            });
+        }
+    }
+
+    executeCallback(promise, callback);
+    return promise;
+}
+
 var asyncStorage = {
     _driver: 'asyncStorage',
     _initStorage: _initStorage,
@@ -2996,7 +3034,8 @@ var asyncStorage = {
     clear: clear,
     length: length,
     key: key,
-    keys: keys
+    keys: keys,
+    dropInstance: dropInstance
 };
 
 function isWebSQLValid() {
@@ -3237,6 +3276,11 @@ var localforageSerializer = {
  * Copyright (c) 2012 Niklas von Hertzen
  * Licensed under the MIT license.
  */
+
+function createDbTable(t, dbInfo, callback, errorCallback) {
+    t.executeSql('CREATE TABLE IF NOT EXISTS ' + dbInfo.storeName + ' ' + '(id INTEGER PRIMARY KEY, key unique, value)', [], callback, errorCallback);
+}
+
 // Open the WebSQL database (automatically creates one if one didn't
 // previously exist), using any options set in the config.
 function _initStorage$1(options) {
@@ -3262,17 +3306,37 @@ function _initStorage$1(options) {
 
         // Create our key/value table if it doesn't exist.
         dbInfo.db.transaction(function (t) {
-            t.executeSql('CREATE TABLE IF NOT EXISTS ' + dbInfo.storeName + ' (id INTEGER PRIMARY KEY, key unique, value)', [], function () {
+            createDbTable(t, dbInfo, function () {
                 self._dbInfo = dbInfo;
                 resolve();
             }, function (t, error) {
                 reject(error);
             });
-        });
+        }, reject);
     });
 
     dbInfo.serializer = localforageSerializer;
     return dbInfoPromise;
+}
+
+function tryExecuteSql(t, dbInfo, sqlStatement, args, callback, errorCallback) {
+    t.executeSql(sqlStatement, args, callback, function (t, error) {
+        if (error.code === error.SYNTAX_ERR) {
+            t.executeSql('SELECT name FROM sqlite_master ' + "WHERE type='table' AND name = ?", [dbInfo.storeName], function (t, results) {
+                if (!results.rows.length) {
+                    // if the table is missing (was deleted)
+                    // re-create it table and retry
+                    createDbTable(t, dbInfo, function () {
+                        t.executeSql(sqlStatement, args, callback, errorCallback);
+                    }, errorCallback);
+                } else {
+                    errorCallback(t, error);
+                }
+            }, errorCallback);
+        } else {
+            errorCallback(t, error);
+        }
+    }, errorCallback);
 }
 
 function getItem$1(key, callback) {
@@ -3284,7 +3348,7 @@ function getItem$1(key, callback) {
         self.ready().then(function () {
             var dbInfo = self._dbInfo;
             dbInfo.db.transaction(function (t) {
-                t.executeSql('SELECT * FROM ' + dbInfo.storeName + ' WHERE key = ? LIMIT 1', [key], function (t, results) {
+                tryExecuteSql(t, dbInfo, 'SELECT * FROM ' + dbInfo.storeName + ' WHERE key = ? LIMIT 1', [key], function (t, results) {
                     var result = results.rows.length ? results.rows.item(0).value : null;
 
                     // Check to see if this is serialized content we need to
@@ -3295,7 +3359,6 @@ function getItem$1(key, callback) {
 
                     resolve(result);
                 }, function (t, error) {
-
                     reject(error);
                 });
             });
@@ -3314,7 +3377,7 @@ function iterate$1(iterator, callback) {
             var dbInfo = self._dbInfo;
 
             dbInfo.db.transaction(function (t) {
-                t.executeSql('SELECT * FROM ' + dbInfo.storeName, [], function (t, results) {
+                tryExecuteSql(t, dbInfo, 'SELECT * FROM ' + dbInfo.storeName, [], function (t, results) {
                     var rows = results.rows;
                     var length = rows.length;
 
@@ -3373,7 +3436,7 @@ function _setItem(key, value, callback, retriesLeft) {
                     reject(error);
                 } else {
                     dbInfo.db.transaction(function (t) {
-                        t.executeSql('INSERT OR REPLACE INTO ' + dbInfo.storeName + ' (key, value) VALUES (?, ?)', [key, value], function () {
+                        tryExecuteSql(t, dbInfo, 'INSERT OR REPLACE INTO ' + dbInfo.storeName + ' ' + '(key, value) VALUES (?, ?)', [key, value], function () {
                             resolve(originalValue);
                         }, function (t, error) {
                             reject(error);
@@ -3418,7 +3481,7 @@ function removeItem$1(key, callback) {
         self.ready().then(function () {
             var dbInfo = self._dbInfo;
             dbInfo.db.transaction(function (t) {
-                t.executeSql('DELETE FROM ' + dbInfo.storeName + ' WHERE key = ?', [key], function () {
+                tryExecuteSql(t, dbInfo, 'DELETE FROM ' + dbInfo.storeName + ' WHERE key = ?', [key], function () {
                     resolve();
                 }, function (t, error) {
                     reject(error);
@@ -3440,7 +3503,7 @@ function clear$1(callback) {
         self.ready().then(function () {
             var dbInfo = self._dbInfo;
             dbInfo.db.transaction(function (t) {
-                t.executeSql('DELETE FROM ' + dbInfo.storeName, [], function () {
+                tryExecuteSql(t, dbInfo, 'DELETE FROM ' + dbInfo.storeName, [], function () {
                     resolve();
                 }, function (t, error) {
                     reject(error);
@@ -3463,9 +3526,8 @@ function length$1(callback) {
             var dbInfo = self._dbInfo;
             dbInfo.db.transaction(function (t) {
                 // Ahhh, SQL makes this one soooooo easy.
-                t.executeSql('SELECT COUNT(key) as c FROM ' + dbInfo.storeName, [], function (t, results) {
+                tryExecuteSql(t, dbInfo, 'SELECT COUNT(key) as c FROM ' + dbInfo.storeName, [], function (t, results) {
                     var result = results.rows.item(0).c;
-
                     resolve(result);
                 }, function (t, error) {
                     reject(error);
@@ -3492,7 +3554,7 @@ function key$1(n, callback) {
         self.ready().then(function () {
             var dbInfo = self._dbInfo;
             dbInfo.db.transaction(function (t) {
-                t.executeSql('SELECT key FROM ' + dbInfo.storeName + ' WHERE id = ? LIMIT 1', [n + 1], function (t, results) {
+                tryExecuteSql(t, dbInfo, 'SELECT key FROM ' + dbInfo.storeName + ' WHERE id = ? LIMIT 1', [n + 1], function (t, results) {
                     var result = results.rows.length ? results.rows.item(0).key : null;
                     resolve(result);
                 }, function (t, error) {
@@ -3513,7 +3575,7 @@ function keys$1(callback) {
         self.ready().then(function () {
             var dbInfo = self._dbInfo;
             dbInfo.db.transaction(function (t) {
-                t.executeSql('SELECT key FROM ' + dbInfo.storeName, [], function (t, results) {
+                tryExecuteSql(t, dbInfo, 'SELECT key FROM ' + dbInfo.storeName, [], function (t, results) {
                     var keys = [];
 
                     for (var i = 0; i < results.rows.length; i++) {
@@ -3532,6 +3594,98 @@ function keys$1(callback) {
     return promise;
 }
 
+// https://www.w3.org/TR/webdatabase/#databases
+// > There is no way to enumerate or delete the databases available for an origin from this API.
+function getAllStoreNames(db) {
+    return new Promise$1(function (resolve, reject) {
+        db.transaction(function (t) {
+            t.executeSql('SELECT name FROM sqlite_master ' + "WHERE type='table' AND name <> '__WebKitDatabaseInfoTable__'", [], function (t, results) {
+                var storeNames = [];
+
+                for (var i = 0; i < results.rows.length; i++) {
+                    storeNames.push(results.rows.item(i).name);
+                }
+
+                resolve({
+                    db: db,
+                    storeNames: storeNames
+                });
+            }, function (t, error) {
+                reject(error);
+            });
+        }, function (sqlError) {
+            reject(sqlError);
+        });
+    });
+}
+
+function dropInstance$1(options, callback) {
+    callback = getCallback.apply(this, arguments);
+
+    var currentConfig = this.config();
+    options = typeof options !== 'function' && options || {};
+    if (!options.name) {
+        options.name = options.name || currentConfig.name;
+        options.storeName = options.storeName || currentConfig.storeName;
+    }
+
+    var self = this;
+    var promise;
+    if (!options.name) {
+        promise = Promise$1.reject('Invalid arguments');
+    } else {
+        promise = new Promise$1(function (resolve) {
+            var db;
+            if (options.name === currentConfig.name) {
+                // use the db reference of the current instance
+                db = self._dbInfo.db;
+            } else {
+                db = openDatabase(options.name, '', '', 0);
+            }
+
+            if (!options.storeName) {
+                // drop all database tables
+                resolve(getAllStoreNames(db));
+            } else {
+                resolve({
+                    db: db,
+                    storeNames: [options.storeName]
+                });
+            }
+        }).then(function (operationInfo) {
+            return new Promise$1(function (resolve, reject) {
+                operationInfo.db.transaction(function (t) {
+                    function dropTable(storeName) {
+                        return new Promise$1(function (resolve, reject) {
+                            t.executeSql('DROP TABLE IF EXISTS ' + storeName, [], function () {
+                                resolve();
+                            }, function (t, error) {
+                                reject(error);
+                            });
+                        });
+                    }
+
+                    var operations = [];
+                    for (var i = 0, len = operationInfo.storeNames.length; i < len; i++) {
+                        operations.push(dropTable(operationInfo.storeNames[i]));
+                    }
+
+                    Promise$1.all(operations).then(function () {
+                        resolve();
+                    })["catch"](function (e) {
+                        reject(e);
+                    });
+                }, function (sqlError) {
+                    reject(sqlError);
+                });
+            });
+        });
+    }
+
+    executeCallback(promise, callback);
+    return promise;
+}
+
 var webSQLStorage = {
     _driver: 'webSQLStorage',
     _initStorage: _initStorage$1,
@@ -3543,15 +3697,27 @@ var webSQLStorage = {
     clear: clear$1,
     length: length$1,
     key: key$1,
-    keys: keys$1
+    keys: keys$1,
+    dropInstance: dropInstance$1
 };
 
 function isLocalStorageValid() {
     try {
-        return typeof localStorage !== 'undefined' && 'setItem' in localStorage && typeof localStorage.setItem === 'function';
+        return typeof localStorage !== 'undefined' && 'setItem' in localStorage &&
+        // in IE8 typeof localStorage.setItem === 'object'
+        !!localStorage.setItem;
     } catch (e) {
         return false;
     }
+}
+
+function _getKeyPrefix(options, defaultConfig) {
+    var keyPrefix = options.name + '/';
+
+    if (options.storeName !== defaultConfig.storeName) {
+        keyPrefix += options.storeName + '/';
+    }
+    return keyPrefix;
 }
 
 // Check if localStorage throws when saving an item
@@ -3586,11 +3752,7 @@ function _initStorage$2(options) {
         }
     }
 
-    dbInfo.keyPrefix = dbInfo.name + '/';
-
-    if (dbInfo.storeName !== self._defaultConfig.storeName) {
-        dbInfo.keyPrefix += dbInfo.storeName + '/';
-    }
+    dbInfo.keyPrefix = _getKeyPrefix(options, self._defaultConfig);
 
     if (!_isLocalStorageUsable()) {
         return Promise$1.reject();
@@ -3810,6 +3972,42 @@ function setItem$2(key, value, callback) {
     return promise;
 }
 
+function dropInstance$2(options, callback) {
+    callback = getCallback.apply(this, arguments);
+
+    options = typeof options !== 'function' && options || {};
+    if (!options.name) {
+        var currentConfig = this.config();
+        options.name = options.name || currentConfig.name;
+        options.storeName = options.storeName || currentConfig.storeName;
+    }
+
+    var self = this;
+    var promise;
+    if (!options.name) {
+        promise = Promise$1.reject('Invalid arguments');
+    } else {
+        promise = new Promise$1(function (resolve) {
+            if (!options.storeName) {
+                resolve(options.name + '/');
+            } else {
+                resolve(_getKeyPrefix(options, self._defaultConfig));
+            }
+        }).then(function (keyPrefix) {
+            for (var i = localStorage.length - 1; i >= 0; i--) {
+                var key = localStorage.key(i);
+
+                if (key.indexOf(keyPrefix) === 0) {
+                    localStorage.removeItem(key);
+                }
+            }
+        });
+    }
+
+    executeCallback(promise, callback);
+    return promise;
+}
+
 var localStorageWrapper = {
     _driver: 'localStorageWrapper',
     _initStorage: _initStorage$2,
@@ -3821,7 +4019,25 @@ var localStorageWrapper = {
     clear: clear$2,
     length: length$2,
     key: key$2,
-    keys: keys$2
+    keys: keys$2,
+    dropInstance: dropInstance$2
+};
+
+var sameValue = function sameValue(x, y) {
+    return x === y || typeof x === 'number' && typeof y === 'number' && isNaN(x) && isNaN(y);
+};
+
+var includes = function includes(array, searchElement) {
+    var len = array.length;
+    var i = 0;
+    while (i < len) {
+        if (sameValue(array[i], searchElement)) {
+            return true;
+        }
+        i++;
+    }
+
+    return false;
 };
 
 var isArray = Array.isArray || function (arg) {
@@ -3842,7 +4058,9 @@ var DefaultDrivers = {
 
 var DefaultDriverOrder = [DefaultDrivers.INDEXEDDB._driver, DefaultDrivers.WEBSQL._driver, DefaultDrivers.LOCALSTORAGE._driver];
 
-var LibraryMethods = ['clear', 'getItem', 'iterate', 'key', 'keys', 'length', 'removeItem', 'setItem'];
+var OptionalDriverMethods = ['dropInstance'];
+
+var LibraryMethods = ['clear', 'getItem', 'iterate', 'key', 'keys', 'length', 'removeItem', 'setItem'].concat(OptionalDriverMethods);
 
 var DefaultConfig = {
     description: '',
@@ -3928,7 +4146,7 @@ var LocalForage = function () {
             // If localforage is ready and fully initialized, we can't set
             // any new configuration values. Instead, we return an error.
             if (this._ready) {
-                return new Error('Can\'t call config() after localforage ' + 'has been used.');
+                return new Error("Can't call config() after localforage " + 'has been used.');
             }
 
             for (var i in options) {
@@ -3976,12 +4194,36 @@ var LocalForage = function () {
 
                 var driverMethods = LibraryMethods.concat('_initStorage');
                 for (var i = 0, len = driverMethods.length; i < len; i++) {
-                    var customDriverMethod = driverMethods[i];
-                    if (!customDriverMethod || !driverObject[customDriverMethod] || typeof driverObject[customDriverMethod] !== 'function') {
+                    var driverMethodName = driverMethods[i];
+
+                    // when the property is there,
+                    // it should be a method even when optional
+                    var isRequired = !includes(OptionalDriverMethods, driverMethodName);
+                    if ((isRequired || driverObject[driverMethodName]) && typeof driverObject[driverMethodName] !== 'function') {
                         reject(complianceError);
                         return;
                     }
                 }
+
+                var configureMissingMethods = function configureMissingMethods() {
+                    var methodNotImplementedFactory = function methodNotImplementedFactory(methodName) {
+                        return function () {
+                            var error = new Error('Method ' + methodName + ' is not implemented by the current driver');
+                            var promise = Promise$1.reject(error);
+                            executeCallback(promise, arguments[arguments.length - 1]);
+                            return promise;
+                        };
+                    };
+
+                    for (var _i = 0, _len = OptionalDriverMethods.length; _i < _len; _i++) {
+                        var optionalDriverMethod = OptionalDriverMethods[_i];
+                        if (!driverObject[optionalDriverMethod]) {
+                            driverObject[optionalDriverMethod] = methodNotImplementedFactory(optionalDriverMethod);
+                        }
+                    }
+                };
+
+                configureMissingMethods();
 
                 var setDriverSupport = function setDriverSupport(support) {
                     if (DefinedDrivers[driverName]) {
@@ -4166,8 +4408,9 @@ module.exports = localforage_js;
 
 },{"3":3}]},{},[4])(4)
 });
+
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],21:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 /**
 Copyright (c) 2012, Benjamin Dumke-von der Ehe
 
@@ -4307,7 +4550,7 @@ function lockImpl(key, callback, maxDuration, synchronous) {
     }
 }
 
-},{}],22:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 (function (global){
 /**
  * lodash (Custom Build) <https://lodash.com/>
@@ -4814,71 +5057,7 @@ var pick = baseRest(function(object, props) {
 module.exports = pick;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],23:[function(require,module,exports){
-'use strict'
-
-var ensureCallable = function (fn) {
-	if (typeof fn !== 'function') throw new TypeError(fn + " is not a function")
-	return fn
-}
-
-var byObserver = function (Observer) {
-	var node = document.createTextNode(''), queue, currentQueue, i = 0
-	new Observer(function () {
-		var callback
-		if (!queue) {
-			if (!currentQueue) return
-			queue = currentQueue
-		} else if (currentQueue) {
-			queue = currentQueue.concat(queue)
-		}
-		currentQueue = queue
-		queue = undefined
-		if (typeof currentQueue === 'function') {
-			callback = currentQueue
-			currentQueue = undefined
-			callback()
-			return
-		}
-		node.data = (i = ++i % 2) // Invoke other batch, to handle leftover callbacks in case of crash
-		while (currentQueue) {
-			callback = currentQueue.shift()
-			if (!currentQueue.length) currentQueue = undefined
-			callback()
-		}
-	}).observe(node, { characterData: true })
-	return function (fn) {
-		ensureCallable(fn)
-		if (queue) {
-			if (typeof queue === 'function') queue = [queue, fn]
-			else queue.push(fn)
-			return
-		}
-		queue = fn
-		node.data = (i = ++i % 2)
-	}
-}
-
-module.exports = (function () {
-	// MutationObserver
-	if ((typeof document === 'object') && document) {
-		if (typeof MutationObserver === 'function') return byObserver(MutationObserver)
-		if (typeof WebKitMutationObserver === 'function') return byObserver(WebKitMutationObserver)
-	}
-
-	// W3C Draft
-	// http://dvcs.w3.org/hg/webperf/raw-file/tip/specs/setImmediate/Overview.html
-	if (typeof setImmediate === 'function') {
-		return function (cb) { setImmediate(ensureCallable(cb)) }
-	}
-
-	// Wide available standard
-	if ((typeof setTimeout === 'function') || (typeof setTimeout === 'object')) {
-		return function (cb) { setTimeout(ensureCallable(cb), 0) }
-	}
-}())
-
-},{}],24:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 'use strict'
 
 /**
@@ -4889,8 +5068,7 @@ module.exports = (function () {
  * @param {number} startIdx The index to begin removing from (inclusive)
  * @param {number} removeCount How many items to remove
  */
-module.exports = function removeItems(arr, startIdx, removeCount)
-{
+module.exports = function removeItems (arr, startIdx, removeCount) {
   var i, length = arr.length
 
   if (startIdx >= length || removeCount === 0) {
@@ -4908,7 +5086,7 @@ module.exports = function removeItems(arr, startIdx, removeCount)
   arr.length = len
 }
 
-},{}],25:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 /**
  * Convert array of 16 byte values to UUID string format of the form:
  * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
@@ -4921,43 +5099,46 @@ for (var i = 0; i < 256; ++i) {
 function bytesToUuid(buf, offset) {
   var i = offset || 0;
   var bth = byteToHex;
-  return bth[buf[i++]] + bth[buf[i++]] +
-          bth[buf[i++]] + bth[buf[i++]] + '-' +
-          bth[buf[i++]] + bth[buf[i++]] + '-' +
-          bth[buf[i++]] + bth[buf[i++]] + '-' +
-          bth[buf[i++]] + bth[buf[i++]] + '-' +
-          bth[buf[i++]] + bth[buf[i++]] +
-          bth[buf[i++]] + bth[buf[i++]] +
-          bth[buf[i++]] + bth[buf[i++]];
+  // join used to fix memory issue caused by concatenation: https://bugs.chromium.org/p/v8/issues/detail?id=3175#c4
+  return ([bth[buf[i++]], bth[buf[i++]], 
+	bth[buf[i++]], bth[buf[i++]], '-',
+	bth[buf[i++]], bth[buf[i++]], '-',
+	bth[buf[i++]], bth[buf[i++]], '-',
+	bth[buf[i++]], bth[buf[i++]], '-',
+	bth[buf[i++]], bth[buf[i++]],
+	bth[buf[i++]], bth[buf[i++]],
+	bth[buf[i++]], bth[buf[i++]]]).join('');
 }
 
 module.exports = bytesToUuid;
 
-},{}],26:[function(require,module,exports){
-(function (global){
+},{}],24:[function(require,module,exports){
 // Unique ID creation requires a high quality random # generator.  In the
 // browser this is a little complicated due to unknown quality of Math.random()
 // and inconsistent support for the `crypto` API.  We do the best we can via
 // feature-detection
-var rng;
 
-var crypto = global.crypto || global.msCrypto; // for IE 11
-if (crypto && crypto.getRandomValues) {
+// getRandomValues needs to be invoked in a context where "this" is a Crypto
+// implementation. Also, find the complete implementation of crypto on IE11.
+var getRandomValues = (typeof(crypto) != 'undefined' && crypto.getRandomValues && crypto.getRandomValues.bind(crypto)) ||
+                      (typeof(msCrypto) != 'undefined' && typeof window.msCrypto.getRandomValues == 'function' && msCrypto.getRandomValues.bind(msCrypto));
+
+if (getRandomValues) {
   // WHATWG crypto RNG - http://wiki.whatwg.org/wiki/Crypto
   var rnds8 = new Uint8Array(16); // eslint-disable-line no-undef
-  rng = function whatwgRNG() {
-    crypto.getRandomValues(rnds8);
+
+  module.exports = function whatwgRNG() {
+    getRandomValues(rnds8);
     return rnds8;
   };
-}
-
-if (!rng) {
+} else {
   // Math.random()-based (RNG)
   //
   // If all else fails, use Math.random().  It's fast, but is of unspecified
   // quality.
   var rnds = new Array(16);
-  rng = function() {
+
+  module.exports = function mathRNG() {
     for (var i = 0, r; i < 16; i++) {
       if ((i & 0x03) === 0) r = Math.random() * 0x100000000;
       rnds[i] = r >>> ((i & 0x03) << 3) & 0xff;
@@ -4967,10 +5148,7 @@ if (!rng) {
   };
 }
 
-module.exports = rng;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],27:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 var rng = require('./lib/rng');
 var bytesToUuid = require('./lib/bytesToUuid');
 
@@ -4978,7 +5156,7 @@ function v4(options, buf, offset) {
   var i = buf && offset || 0;
 
   if (typeof(options) == 'string') {
-    buf = options == 'binary' ? new Array(16) : null;
+    buf = options === 'binary' ? new Array(16) : null;
     options = null;
   }
   options = options || {};
@@ -5001,7 +5179,7 @@ function v4(options, buf, offset) {
 
 module.exports = v4;
 
-},{"./lib/bytesToUuid":25,"./lib/rng":26}],28:[function(require,module,exports){
+},{"./lib/bytesToUuid":23,"./lib/rng":24}],26:[function(require,module,exports){
 var bundleFn = arguments[3];
 var sources = arguments[4];
 var cache = arguments[5];
@@ -5083,7 +5261,7 @@ module.exports = function (fn, options) {
     return worker;
 };
 
-},{}],29:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 'use strict'
 
 const localforage = require('localforage')
@@ -5257,4 +5435,4 @@ module.exports = async function audioStorage(options={}) {
     removeRecording, write, pipe, unpipe })
 }
 
-},{"./lib/convert-cached-audio-to-entry":4,"ev-pubsub":16,"localforage":20}]},{},[1]);
+},{"./lib/convert-cached-audio-to-entry":4,"ev-pubsub":16,"localforage":19}]},{},[1]);
