@@ -14,25 +14,26 @@ const watsonSTT    = require('./lib/watson-stt')
 
 
 /*
-finite state machine for speechinput widget. initial state: IDLE
-
-          ┌----┐
-┌---┬---> |IDLE├-------┐
+finite state machine for speechinput widget.
+            ●
+            |
+          ┌-┴--┐
+┌---┬---▶ |IDLE├-------┐
 |   |     └----┘       |
-|   |       ^          v
+|   |       ▲          ▼
 | ┌-┴-----┐ |  ┌---------------┐
-| |OFFLINE| └--┤SETUP-RECORDING| <-┬--------┐
+| |OFFLINE| └--┤SETUP-RECORDING| ◀-┬--------┐
 | └---┬---┘    └--┬------------┘   |        |
 |     |           |                |        |
 |     |           v                |        |
 |     |        ┌---------┐     ┌---┴----┐   |
-|     └------> |RECORDING├---> |CLEARING| <-┤
+|     └------▶ |RECORDING├---▶ |CLEARING| ◀-┤
 |              └--┬----┬-┘     └--------┘   |
 |                 |    |                    |
 | ┌----------┐    |    |       ┌------┐     |
-└-┤FINALIZING| <--┘    └-----> |PAUSED├-----┘
+└-┤FINALIZING| ◀--┘    └-----▶ |PAUSED├-----┘
   └----------┘                 └--┬---┘
-        ^                         |
+        ▲                         |
         └-------------------------┘
 */
 
